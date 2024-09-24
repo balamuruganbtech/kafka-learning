@@ -1,0 +1,131 @@
+    1  whoami
+    2  ifconfig
+    3  wget https://archive.apache.org/dist/kafka/3.6.0/kafka_2.12-3.6.0.tgz --no-check-certificate
+    4  ls
+    5  tar -xvf kafka_2.12-3.6.0.tgz
+    6  mkdir -p /tmp/zookeeper1
+    7  mkdir -p /tmp/zookeeper2
+    8  mkdir -p /tmp/zookeeper3
+    9  chmod 777 -R /tmp/zookeeper1
+   10  chmod 777 -R /tmp/zookeeper2
+   11  chmod 777 -R /tmp/zookeeper3
+   12  ls
+   13  echo "1" >> /tmp/zookeeper1/myid
+   14  echo "2" >> /tmp/zookeeper2/myid
+   15  echo "3" >> /tmp/zookeeper3/myid
+   16  cd /home/rps/kafka_2.12-3.6.0/config
+   17  vi zookeeper1.properties
+   18  cat zookeeper1.properties 
+   19  cp zookeeper1.properties zookeeper2.properties
+   20  cat zookeeper2.properties 
+   21  clear
+   22  ls
+   23  history
+   24  cp zookeeper1.properties zookeeper3.properties
+   25  clear
+   26  ls
+   27  ls -lrth
+   28  clear
+   29  vi zookeeper2.properties 
+   30  cat zookeeper2.properties 
+   31  vi zookeeper3.properties 
+   32  cat zookeeper3.properties 
+   33  cd /home/rps/kafka_2.12-2.6.0/bin
+   34  history
+   35  cd /home/rps/kafka_2.12-3.6.0/bin
+   36  nohup ./zookeeper-server-start.sh ..\..\config\zookeeper1.properties &
+   37  nohup ./zookeeper-server-start.sh..\..\config\zookeeper2.properties &
+   38  clear
+   39  nohup ./zookeeper-server-start.sh ..\..\config\zookeeper1.properties &
+   40  nohup ./zookeeper-server-start.sh ..\..\config\zookeeper2.properties &
+   41  nohup ./zookeeper-server-start.sh ..\..\config\zookeeper3.properties &
+   42  clear
+   43  nohup ./zookeeper-server-start.sh ../config\zookeeper1.properties &
+   44  nohup ./zookeeper-server-start.sh ../config/zookeeper1.properties &
+   45  nohup ./zookeeper-server-start.sh ../config/zookeeper2.properties &
+   46  nohup ./zookeeper-server-start.sh ../config/zookeeper3.properties &
+   47  nc
+   48  echo srvr |nc localhost 2181 | grep Mode
+   49  echo srvr |nc localhost 2182 | grep Mode
+   50  echo srvr |nc localhost 2183 | grep Mode
+   51  nohup ./zookeeper-server-start.sh ./config/zookeeper3.properties &
+   52  echo srvr |nc localhost 2183 | grep Mode
+   53  nohup ./zookeeper-server-start.sh ../config/zookeeper3.properties &
+   54  echo srvr |nc localhost 2183 | grep Mode
+   55  cat /tmp/zookeeper3/myid
+   56  echo srvr |nc localhost 2183 | grep Mode
+   57  ./zookeeper-server-start.sh ../config/zookeeper3.properties
+   58  vi ../config/zookeeper3.properties 
+   59  cat ./config/zookeeper3.proprties
+   60  cat ./config/zookeeper3.properties
+   61  cat ../config/zookeeper3.properties
+   62  ./zookeeper-server-start.sh ../config/zookeeper3.properties
+   63  echo srvr |nc localhost 2183 | grep Mode
+   64  nohup ./zookeeper-server-start.sh ../config/zookeeper3.properties &
+   65  echo srvr |nc localhost 2183 | grep Mode
+   66  echo srvr |nc localhost 2182 | grep Mode
+   67  echo srvr |nc localhost 2181 | grep Mode
+   68  cler
+   69  clear
+   70  cat  ../config/zookeeper3.properties
+   71  cd ..
+   72  ls
+   73  cd config/
+   74  ll
+   75  cls
+   76  clear
+   77  ll
+   78  vi server1.properties
+   79  cat server1.properties 
+   80  cp server1.properties server2.properties
+   81  cp server1.properties server3.properties
+   82  cp server1.properties server4.properties
+   83  ll
+   84  vi server2.properties 
+   85  vi server3.properties 
+   86  cat server2.properties 
+   87  cat server3.properties 
+   88  vi server3.properties 
+   89  vi server4.properties 
+   90  vi server3.properties 
+   91  vi server2.properties 
+   92  cat server1.properties 
+   93  cat server2.properties 
+   94  cat server1.properties 
+   95  cat server4.properties 
+   96  cat server3.properties 
+   97  vi server4.properties 
+   98  clear
+   99  vi server3.properties 
+  100  vi server2.properties 
+  101  vi server3.properties 
+  102  vi server4.properties 
+  103  cd /home/rps/kafka_2.12-3.6.0/bin
+  104  nohup ./kafka-server-start.sh ../config/server1.properties &
+  105  nohup ./kafka-server-start.sh ../config/server2.properties &
+  106  nohup ./kafka-server-start.sh ../config/server3.properties &
+  107  nohup ./kafka-server-start.sh ../config/server4.properties &
+  108  ./zookeeper-shell.sh localhost:2181 get /controller
+  109  clear
+  110  ./zookeeper-shell.sh localhost:2181 get /controller
+  111  ./zookeeper-shell.sh  localhost:2181 ls /brokers/ids
+  112  clear
+  113  ./kafka-topics.sh --create --topic demo1 --bootstrap-server localhost:9093,localhost:9095
+  114  ./kafka-topics.sh --list --bootstrap-server localhost:9093,localhost:9095
+  115  ./kafka-topics.sh --describe --topic demo1 --bootstrap-server localhost:9093,localhost:9095
+  116  ./kafka-topics.sh --list --bootstrap-server localhost:9093,localhost:9095
+  117  ./kafka-topics.sh --create --topic demo2 --partitions 2  --bootstrap-server localhost:9093,localhost:9095
+  118  ./kafka-topics.sh --create --topic demo3 --partitions 2 --replication-factor 2 --bootstrap-server localhost:9093,localhost:9095 --config max.message.bytes=2096588
+  119  ./kafka-console-producer.sh --bootstrap-server localhost:9092 --topic demo1 --property parse.key=true --property key.separator=:
+  120  clear
+  121  ./kafka-console-producer.sh --bootstrap-server localhost:9092 --topic demo1 --property parse.key=true --property key.separator=:
+  122  clear
+  123  ./kafka-console-producer.sh --bootstrap-server localhost:9092 --topic demo1 --property parse.key=true --property key.separator=:
+  124  k./kafka-console-consumer.sh --topic demo1  --bootstrap-server localhost:9092 --from-beginning
+  125  ./kafka-console-consumer.sh --topic demo1  --bootstrap-server localhost:9092 --from-beginning
+  126  ./kafka-console-consumer.sh --topic demo1  --bootstrap-server localhost:9092 --from-beginning --property print.partition=true --property print.offset=true
+  127  ll
+  128  cd kafka_2.12-3.6.0/
+  129  ll
+  130  history
+  131  history > command.txt
