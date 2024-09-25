@@ -1,0 +1,342 @@
+
+Messaging Platform?
+
+Producer >> M1,M2,M3 >> System >> Consumer M1,M2,M3
+
+
+Producer >>  M1,M2,M3 >> Topic 
+                               >> Queue A : M1,M2,M3 >> Client A  M1,M2,M3
+        
+         >> >> Queue B:M1,M2,M3 >> Client B : M1,M2,M3
+
+ActiveMQ,RabbitMQ,JMS
+
+
+PuBSub
+
+Producer >>  Topic M1,M2,M3: FIFO >> Consumer (Subscription A:M2,B:M1,C)
+
+Queue >> M1, M2, M3 
+
+index : M2,M3 
+
+A: Sales: 15, 16>>>
+B: Sales: 71, 72>> 
+	
+At-most once ::  M1,M2,M3,M4 >> M3,M4 : 
+
+at-least once :: M1,M2,M3 >>  M1,M2 , M1,M2,M3 
+
+exactly once :: M1,M2,M3 >> M1 >> M2,M3 
+	
+--------------------------------------------------------------
+ 
+ 
+
+
+What is Kafka ?
+
+A. it is streaming platform: 
+
+B. It is persistant messaging platform/Queue/System :
+
+C. It is pubSub platfrom 
+
+
+D. is kakfa a database ?  Kafka is not a database 
+  Kafka stream >> kSQLDB >> KSQLDB will allow to run SQL quries in kafka and client application also.
+  
+
+what do we expect from a database ?
+  A) CRUD : Kafka does not support CRUD operations , it supports only create and retreive operations , update and delete are not possible in Kafka . In kafka messages will be deleted only based on retention period.
+  
+  
+  B) Transaction management : Kafka provided Transaction management
+  
+  C) Kafka will never allow you to consume messages in random order 
+  
+ ------------------------------------------------------------------- 
+kafka will provide below 2 features: 
+ 
+-- High scalablity : messaging platform/pubSub should allow us to store infinte data , Producer and consumer application should be made highly scalable . To provide high scalablity it must be cluster platform .
+ 
+-- High availablity :  Our Applications should be allowed to produce and consume the messages even in the case of server failures.
+       
+
+
+
+Kafka REST/HTTPS: encryption : it allows to develop application in any langauge to work with Kafka 
+
+-----------------------
+
+Kafka use cases:
+1. MircoServices Architecute 
+   A) if they want to communicate in Syn manner :: Socket/TCP connection
+   B) if they want to communicate in ASyn mannger ::  Kafka will come into picture 
+   
+
+2. As Big data Message platform 
+
+------------------------------------------------
+In the cluster , following architecture 
+A> Single master , multi workers : RDBMS , Kafka 
+B> Multi masters,multi workers,MongoDB, Redis
+C> Master-less   : Cassandra
+
+--------------------------------------
+Kafka though it follows single master , multi workers but still provides high scalablity .
+In kakfa master will be called as ActiveController . ActiveController will handle only DDL(create/delete/updating the properties) Operations.  DML(writing/reading messages can be handled by any kafka broker.
+--------------------------------------------
+Kafka uses default partitioning logic to decide which message will be written into whcih partition.
+
+-- default partitioning uses HASH partitioning is message contains key and value otherwise it will use round robin.
+
+Producers >> Key: 10 value: Java inbuild object/custom object/JSON/AVRO/ProtoBuf
+
+Key: 100: Null
+value : {salesid:100,pid:50,amount:5000,city:BLR}
+T1
+
+ 
+HASH CODE(10) = 5678 % 6 = 2(p2:10,R2:30)
+
+
+if leader partition goes down, then ActiveController will promote in-sync replica partition into leader partition 
+
+- out of sync replica can't be promoted into leader partition role automatically, it can be done manually by the administrator .
+
+--
+replication-factor:3 
+
+P2, R2, R2"
+
+min.insync.replicas:2
+
+ack: All(min.insync.replicas): P2, >> R2/R2"
+---------------------------------------------------------------------------
+2 types of producers in Kafka 
+
+A. Sync Producer 
+
+B. Async Producers
+  i) fire and forget
+  ii) fire and notify 
+  
+---------------------------------
+if you want to use kafka as pure message queue :
+i) Use Sync Producer 
+ii) write data into topic having single partition 
+---------------------------------------------------------
+if you want to use kafka as pure message queue :
+i) Use Sync Producer 
+ii) write data into topic having multi partition either using partition name directly or using custom partitioning 
+
+-----------------------------------
+
+videos : day 1 >> part-0
+         day2 >> part-1
+		 day- part-2
+--------------------------------------------
+		 
+Batch1
+key:10, V1,
+key: 11 V2: failed
+
+
+Batch2
+
+Key:13 V3
+Key:14 V4: failed to ack
+
+
+Batch3
+key:15 V5  >> ack 
+key: 11 V2: Batch1>> write >> ack 
+Key:14 V4 : Batch2>> avoid >> ack
+-------------------------
+
+./kafka-topics.sh --create --topic demo13 --partitions 2 --replication-factor 3 --bootstrap-server 192.168.88.128:9092 --config cleanup.policy=compact --config max.compaction.lag.ms=1000
+   
+
+10 "Mukesh Kumar"  T1>> deleted 
+---------------------------------
+10 "Mukesh Kumar Shukla" T2
+10 "Mukesh" T3 
+-----------------------
+No of Partitions ?
+
+1. Based on the size of the data in a topic:
+ each partition should not have more than 10 GB data 
+ 
+ 2TB business data :
+      No of partitions = 2 * 1024/10 = 200 Partitions 
+	  
+	  segment file >> 1 GB >> 10 segment files >> index/timeindex 
+	  
+2. Based on throughput :
+    producer(muti threaded) >> How much MB/s in a single partition : 400 MB/s
+	
+	Business requriment: 2GB/sec
+
+   No of partitions = 2*1014/400 = 20 partitions 
+
+   
+3. Based on Consumer instances:
+      = 10MB/sec =  400/10 = 40 instances with single thread Or 10 instances with 4 threads
+	  
+Max( all these calculations )= Max(200,20,40) = 200
+------------------------------------------------------------
+
+single topic : 2TB
+
+replication-factor: 3
+
+total data : 6TB 
+
+broker: 1 TB HDD 
+
+No of brokers = 6TB/1= 6 brokers
+------------------------------------
+
+Kafka's memory " 1/4 of system memory 
+
+kafka will use remaining system memory as page cache :
+
+Kafka's segement is a memory mapped file : each block address is mapped in the RAM,when we read the data from the block , that content of the block becomes in memory .
+
+64GB RAM per broker is good enough :
+----------------------------------------------------------------------
+
+10 days * 1 GB = 10 GB >> file system (segment files) 
+
+Kafka >> segment file : 10GB >> in the RAM as page cache , if memory is not sufficient then kafka will do page swap to remove the older blocks from the RAM and load new block into RAM. But this page swap will affect the read latency (performance) and if you don't want to comprimise on the performance then add the more brokers since increasing the memory on the existing on the broker is not recommanded.
+
+
+---------------------------------------------
+
+Producer client: 1600 threads (machice A: 4 cores: ) >>  
+----------------------------------------------------
+ 172.31.98.208:9092:64K,172.31.98.208:9093:64K,172.31.98.208:9094:64K
+------------------------------------------------------------
+
+
+No of partitions : can be increased 
+
+10(2GB each) >> 50>> 10(2GB each) +40 empty partitions 
+----------------------------
+Kafka Streams: is a stream processing library from kafka to perform parallel, distributed,fault tolerant statefull computing .
+
+----------------------------------------
+Stream and Table concept in Kafka Streams:
+
+CDC :
+employees: empoyeeid as primary key 
+
+10,'Mukesh','BLR'
+20,'Dinesh','HYD'  >>  file 
+						  I>	10,'Mukesh','BLR'
+						   I>	20,'Dinesh','HYD'
+                      
+
+20,'Mukesh','Delhi'
+    >>>              U,"10,'Mukesh','BLR'",20,'City:Delhi'
+
+     >>>    
+	   10,'Mukesh','Delhi'
+	   20,'Dinesh','HYD'  >> table 
+	  
+   
+-------------------------------
+Table : for the given only latest value will be returned
+
+Stream: for the given keys all the values will be returned
+ 
+---------------------------
+TOPIC >> Table/Stream>>
+
+Topology : some of functions are going to act like mapper ,while some other functions are going to act like reducers 
+
+Mappers:
+
+flatMapValues
+flatMap
+filter
+map
+select
+.selectkey
+
+Shuffling:
+
+groupBy
+
+
+Reducers:
+reduceByKey
+groupBykey
+aggregateByKey
+count
+union
+join
+
+--------------------------------------------------
+HASH Partitioning: HASH code (I) = 6543 % 2= 1(part-1)
+                 : HASH code (am)= 1764 %2= 0 (part-0)
+				 : HASH code (Suresh)= 84321 %2=1 (part-1)
+				 : HASH code (mukesh)= 9420 %2= 0 (part-0)
+				 
+-------------------------------------------------------
+Numbers 
+
+P0  
+10 10
+11 11>>
+12 12
+
+
+P1
+22 22
+23 23>> 
+24 24
+
+
+--------------------------------
+result : P0 
+SUM of odd numbers >> 11+23= 34 
+
+SUM of odd numbers >> 11+23= 34 +13= 47
+
+-------------------------------------------------------------------
+
+
+Numbers>> stream >> KSteam >> filter (map) >> Shuffle >> Redcuer(SUM)
+
+KSteam.filter(k,v -> v%2 !=0 )>> selectKey(k,v -> (1,v))
+T1(P0)
+
+11 11>>
+
+T2(P1)
+
+23 23>> 1, 23 
+
+>> reducer >> 1 <11,23>
+    :: 24
+
+---------------------------------
+Confluent Kafka :
+1. Control center : for monitoring the cluster 
+2. Schema Registry: to help producers storing the schema information , so that consumer can check the schema before start consuming the messages>> Schema versioning 
+
+3. REST API
+4. Extended source and sink support in kafka-connect
+5. KSQL
+6. MQTT protocol
+
+--------------------
+Security:
+
+Authentication and Authorization:
+--------------------------------------
+Azure HD insight : Platform as service 
+AWS EMR
+
