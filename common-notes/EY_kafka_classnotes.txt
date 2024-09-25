@@ -1,0 +1,168 @@
+
+Messaging Platform?
+
+Producer >> M1,M2,M3 >> System >> Consumer M1,M2,M3
+
+
+Producer >>  M1,M2,M3 >> Topic 
+                               >> Queue A : M1,M2,M3 >> Client A  M1,M2,M3
+        
+         >> >> Queue B:M1,M2,M3 >> Client B : M1,M2,M3
+
+ActiveMQ,RabbitMQ,JMS
+
+
+PuBSub
+
+Producer >>  Topic M1,M2,M3: FIFO >> Consumer (Subscription A:M2,B:M1,C)
+
+Queue >> M1, M2, M3 
+
+index : M2,M3 
+
+A: Sales: 15, 16>>>
+B: Sales: 71, 72>> 
+	
+At-most once ::  M1,M2,M3,M4 >> M3,M4 : 
+
+at-least once :: M1,M2,M3 >>  M1,M2 , M1,M2,M3 
+
+exactly once :: M1,M2,M3 >> M1 >> M2,M3 
+	
+--------------------------------------------------------------
+ 
+ 
+
+
+What is Kafka ?
+
+A. it is streaming platform: 
+
+B. It is persistant messaging platform/Queue/System :
+
+C. It is pubSub platfrom 
+
+
+D. is kakfa a database ?  Kafka is not a database 
+  Kafka stream >> kSQLDB >> KSQLDB will allow to run SQL quries in kafka and client application also.
+  
+
+what do we expect from a database ?
+  A) CRUD : Kafka does not support CRUD operations , it supports only create and retreive operations , update and delete are not possible in Kafka . In kafka messages will be deleted only based on retention period.
+  
+  
+  B) Transaction management : Kafka provided Transaction management
+  
+  C) Kafka will never allow you to consume messages in random order 
+  
+ ------------------------------------------------------------------- 
+kafka will provide below 2 features: 
+ 
+-- High scalablity : messaging platform/pubSub should allow us to store infinte data , Producer and consumer application should be made highly scalable . To provide high scalablity it must be cluster platform .
+ 
+-- High availablity :  Our Applications should be allowed to produce and consume the messages even in the case of server failures.
+       
+
+
+
+Kafka REST/HTTPS: encryption : it allows to develop application in any langauge to work with Kafka 
+
+-----------------------
+
+Kafka use cases:
+1. MircoServices Architecute 
+   A) if they want to communicate in Syn manner :: Socket/TCP connection
+   B) if they want to communicate in ASyn mannger ::  Kafka will come into picture 
+   
+
+2. As Big data Message platform 
+
+------------------------------------------------
+In the cluster , following architecture 
+A> Single master , multi workers : RDBMS , Kafka 
+B> Multi masters,multi workers,MongoDB, Redis
+C> Master-less   : Cassandra
+
+--------------------------------------
+Kafka though it follows single master , multi workers but still provides high scalablity .
+In kakfa master will be called as ActiveController . ActiveController will handle only DDL(create/delete/updating the properties) Operations.  DML(writing/reading messages can be handled by any kafka broker.
+--------------------------------------------
+Kafka uses default partitioning logic to decide which message will be written into whcih partition.
+
+-- default partitioning uses HASH partitioning is message contains key and value otherwise it will use round robin.
+
+Producers >> Key: 10 value: Java inbuild object/custom object/JSON/AVRO/ProtoBuf
+
+Key: 100: Null
+value : {salesid:100,pid:50,amount:5000,city:BLR}
+T1
+
+ 
+HASH CODE(10) = 5678 % 6 = 2(p2:10,R2:30)
+
+
+if leader partition goes down, then ActiveController will promote in-sync replica partition into leader partition 
+
+- out of sync replica can't be promoted into leader partition role automatically, it can be done manually by the administrator .
+
+--
+replication-factor:3 
+
+P2, R2, R2"
+
+min.insync.replicas:2
+
+ack: All(min.insync.replicas): P2, >> R2/R2"
+---------------------------------------------------------------------------
+2 types of producers in Kafka 
+
+A. Sync Producer 
+
+B. Async Producers
+  i) fire and forget
+  ii) fire and notify 
+  
+---------------------------------
+if you want to use kafka as pure message queue :
+i) Use Sync Producer 
+ii) write data into topic having single partition 
+---------------------------------------------------------
+if you want to use kafka as pure message queue :
+i) Use Sync Producer 
+ii) write data into topic having multi partition either using partition name directly or using custom partitioning 
+
+-----------------------------------
+
+videos : day 1 >> part-0
+         day2 >> part-1
+		 day- part-2
+--------------------------------------------
+		 
+Batch1
+key:10, V1,
+key: 11 V2: failed
+
+
+Batch2
+
+Key:13 V3
+Key:14 V4: failed to ack
+
+
+Batch3
+key:15 V5  >> ack 
+key: 11 V2: Batch1>> write >> ack 
+Key:14 V4 : Batch2>> avoid >> ack
+-------------------------
+
+./kafka-topics.sh --create --topic demo13 --partitions 2 --replication-factor 3 --bootstrap-server 192.168.88.128:9092 --config cleanup.policy=compact --config max.compaction.lag.ms=1000
+   
+
+10 "Mukesh Kumar"  T1>> deleted 
+---------------------------------
+10 "Mukesh Kumar Shukla" T2
+10 "Mukesh" T3 
+-----------------------
+
+
+

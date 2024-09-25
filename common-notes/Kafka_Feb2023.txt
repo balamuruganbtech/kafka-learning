@@ -1,0 +1,506 @@
+
+Kafka is higly scalable and higly available messaging and pubSub platfrom
+
+
+Mukesh
+
+Mu
+Muk
+Muke
+Mukes
+Mukesh
+
+Mahesh: Fuzzy query : 2
+
+----------------
+RDBMS : ACID 
+
+Atomcity :
+---------------
+
+
+Use cases:
+
+1. Asyn communicatin medium for microservices 
+
+2. Big data Messaging or PubSub 
+-----------------------------------------
+solace 
+
+----------------------------------------
+
+AWS SQS:
+
+AWS MSK:
+AWS kinesis : Data Stream(Topic)
+SQL >>  Data Stream
+-------------------------
+Azure PubSub or google PubSub>> 
+---------------------------------------
+A. Single master and multi workers: RDBMS 
+B. Multi masters and multi workers : NoSQL (MongoDB : Shards)
+C. Master-less : Cassandra 
+-----------------------
+
+----------
+Kafka is a cluster : single master and multi workers 
+
+Master node which is called as activeController will be responsible for DDL Operations(Create/delete/changing the property of the topic)
+
+Rest of requests such as read/write will be handled by workers(brokers).
+
+-- election has be conducted among the Kafka brokers to elect the activeController 
+
+-- election comminsors 
+--- zookeeper provides 3 freatures 
+   
+   a) we store some data/metadata in zookeeper which will be replicated acorss all the zookeeper nodes . The data has to be written in Znode on the Leader node . Write operation will be consider sucessful if data gets written on QUORUM of Zk nodes.
+   
+   QUORUM(majority) of 3 nodes = 3/2+ 1= 2
+   
+   -- broker/ids
+   -- activeController 
+   
+   
+
+b) ---  Zk will conduct elections 
+c) --  ZK will generate notifications
+---------------------------------------------------
+
+Sales: How many partitions are needed for the topic?
+
+Sales : 
+
+by default:2
+min.insync.replicas:2
+  
+Sales: 6 Partitions 
+  
+APP: Sales : 
+
+Properties ptr= new Properties();
+Properties.put("bootstrap.server","10.11.12.13:9200,20.21.40.11:9200")
+Properties.put("acknowledgement","all")
+
+KafkaProducer producer= new KakfaProducer(Properties);
+
+
+Key: 10: null
+Value  : JAVA/String/JSON/AVRO 
+
+{"pid:101,amount:5500,city: "BLR"}
+
+
+producer.send("sales",Key,value)
+-------------------------------------------
+HASH Partition :RoundRobin >> Kakfa's default partitioning strategy
+
+hashcode(10)= 1234 % 6= 4(P4,R4,R4")
+---------------------------------------------
+
+
+
+kafka-topics.bat --create --topic kafkademo3 --partitions 6 --replication-factor 2 --bootstrap-server
+localhost:9092,localhost:9093
+
+kafka-topics.bat --create --topic demo12 --partitions 2 --replication-factor 1 --bootstrap-server localhost:9092 --config cleanup.policy=compact --config max.compaction.lag.ms=1000
+
+P0 
+K1 "I am Mukesh"  0
+K2 : "I am Dinesh" 1
+
+K1 : "I am Mukesh Kumar Shukla" 2
+-----------------------------
+K1 "I am Mukesh Kumar Shukla" 0
+K2 "I am Dinesh" 1
+-----------------------
+
+kafka-topics.sh --zookeeper localhost:2181 --alter --topic kafkademo8 --partitions 7
+
+
+cat custom-reassignment-kafkademo8.json
+{"version":1,"partitions":[{"topic":"kafkademo8","partition":0,"replicas":[10,20,30]},{"topic":"kafkademo8","partition":1,"replicas":[20,30,40]},
+{"topic":"kafkademo8","partition":2,"replicas":[20,10,40]},
+{"topic":"kafkademo8","partition":3,"replicas":[40,10,30]}]}
+
+kafka-reassign-partitions.bat --bootstrap-server localhost:9092 --reassignment-json-file custom-reassignment-kafkademo8.json --execute
+
+kafka-reassign-partitions.bat -topics-to-move-json-file topics-to-move.json --broker-list "10,20,30,40,50" --generate --zookeeper localhost:2181
+-----------------------------------------------------
+
+1 "I am Mukesh"
+2 "I am Dinesh"
+3 "I am Suresh"
+4 "I am Rajesh"  >>    I 1, am 1, Mukesh 1 T1 >> I 2 , am 2 Mukesh 1Dinesh 1 T2 >> I 3 am 3 Mukesh 1 Dinesh 1 Suresh 1T3>> I 4 am 4 Mukesh 1 Dinesh 1 Suresh 1 Rajesh 1 T4
+
+
+>> Statefull processing >> you need to use some database to store the state data 
+
+
+>> Kafka consumer API we can achive parallel processing by running instances with the same consumber group ID 
+
+-- distributed computing 
+-- fault tolerance 
+
+Kakfa stream is going to help to write parallel distributed fault tolerant statefull applications
+
+------------------------------------
+
+Map Reduce ::
+
+1 GB data >> application >> Good amount of time 
+   >> 8 blocks of 128 MB >> 8 instances >> processing speed will be faster 
+   
+
+I am Mukesh 
+I am Dinesh >> Block A >> Mapper Logic (take each sentance,split it and generate tuple of (word,1))>> (I 1)(am 1)(Mukesh 1)(I 1)(am 1)(Dinesh 1)>> local aggregation I (2) am(2) (Mukesh 1) Dinesh (1)>> Shuffling(HashPartition) >>
+
+hashcode(I) = 1234 %2= 0
+
+part-m-0000
+I (2)
+Dinesh (1)
+
+
+part-m-0001
+am (2)
+Mukesh (1)
+
+
+I am Rajesh
+I am Mahesh >> Block B >> Mapper Logic (take each sentance,split it and generate tuple of (word,1))>> (I 1)(am 1)(Rajesh 1)(I 1)(am 1)(Mahesh 1) >> Shuffling(objectives: same key data should go same reducer and number of key-value pair should be equally distributed)
+
+part-m-0000
+I (2)
+Mahesh (1)
+
+
+part-m-0001
+am (1)
+Rajesh (1)
+
+
+R0
+part-m-0000
+I (2,2)
+Mahesh (1)
+Dinesh (1)   >> count >> I 4, Mahesh 1, Dinesh 1
+
+
+
+
+R1 
+part-m-0001
+am (1,2)
+Rajesh (1)
+Mukesh (1)>> count >> am 3, Rajesh 1, Mukesh 1
+
+
+
+   
+   
+Stream/Table :
+
+CDC : change data capture:
+
+employees: empiID 
+i)10,Mukesh>> append
+i)11,Suresh>> append
+u)10,Mukesh Kumar>> append >>   Stream(immutable)
+
+
+10,Mukesh Kumar
+11,Suresh >> Table  (mutable)  : T1
+
+
+Tpoic>> Stream/Table >> transforms >> filter/flatMap/Map/split>> groupby/orderBy>> State (RocksDB: keyvalue in-memory persisted database: Redis)>>   NewTopic
+
+I 1
+I 2  >> new Topic T1 (I 2)
+I 2+1 >> I 3 (state) >> logic >> new Topic T1 (T 3)
+---------------------------------------------------------------
+
+T1 : [10 I,10 am,10 Mukesh][11 I,11 am 11 Dinesh]
+
+>> I (1,1): 2
+>> am (1,1): 2
+>> Mukesh (1): 1
+>> Dinesh (1): 1  >> State 
+
+---------------------------------------------------------------
+
+
+kafka-console-consumer.bat --topic wcoutput1 --from-beginning --bootstrap-server localhost:9092 --property print.key=true --property print.timestamp=true --property value.deserializer=org.apache.kafka.common.serialization.LongDeserializer
+-----------------------------
+
+demo2
+P0
+20 I am Mukesh
+21 I am Suresh  >> flatMap(0) >> [20 I,20 a,20 Mukesh][21 I,21 a,21 Suresj]>> GroupBy(Shuffling) >> intermediate topic A"
+
+P0(A")
+I (I,I)
+Suresh (Suresh)
+
+P1(A")
+am (am,am)
+Mukesh (Mukesh
+--------------------------------
+P1(demo)
+30 I am Dinesh
+31 I am Mahesh  >> flatMap(1)>> [20 I,20 a,20 Dinesh][21 I,21 a,21 Mahesh]>>GroupBy(Shuffling) >> intermediate topic A"
+
+
+
+P0(A")
+I (I,I)
+Suresh (Suresh)
+I (I,I)
+Dinesh (Dinesh)  >> Count(0)>> I 4, Suresh 1, Dinesh 1(RocksDB:changelog:compactTopic)>> wcoutput1(p0)
+
+P1(A")
+am (am,am)
+Mukesh (Mukesh
+am (am,am)       >> Count(1)>> am 4 Mukesh 1 Mahesh 1 (RocksDB:changelog:compactcompactTopic)>>wcoutput1(P1)
+Mahesh (Mahesh)
+---------------
+
+Kafka topic(partitions) >> Kinesis Data Stream(Shards)
+
+Kafka connect >> Kinesis Firehouse 
+
+Topic >> Kakfa Stream(KSQL) >> Kinesis data Analytics 
+-------- 
+11 11>> (1,11)
+12 12
+13 13>> (1,13)  >>  1 <39>>> reducer T1
+15 15 >> (1,15)
+----------------------------------------
+On every broker :
+
+Keystore file : certificate 
+trust file : All the brokers's certificate 
+
+-------------------------------
+Keystore file : certificate 
+
+CA : (internal or external)
+certificate+signed by the CA = Signed certificate 
+
+trust of every broker: improt their own keystore and CA's signature 
+------------------------------------------
+1. generate keystore file for each broker:
+
+sudo keytool -keystore broker10.keystore.jks -alias broker10 -validity 30 -genkey
+
+2. Setup the CA authroity:
+
+it will generate the certificate of CA : it will give 2 files ca-cert and ca-key
+
+sudo openssl req -new -x509 -keyout ca-key -out ca-cert -days 30
+
+
+3. Let's import CA certificate "ca-cert" into keystore file of broker10 "broker10.keystore.jks"
+
+sudo keytool -keystore broker10.keystore.jks -alias CARoot -import -file ca-cert
+
+
+4. Get the public certificate of keystore imported into un-signed file "cert-file-broker10"
+
+sudo keytool -keystore broker10.keystore.jks -alias broker10 -certreq -file cert-file-broker10
+
+5. Get this un-signed file "cert-file-broker10" signed by the CA and provide file "cert-signed-broker10"
+
+sudo openssl x509 -req -CA ca-cert -CAkey ca-key -in cert-file-broker10 -out cert-signed-broker10 -days 30 -CAcreateserial -passin pass:kafka123
+
+
+6. Import the CA's cert file into truststore  
+sudo keytool -keystore broker10.truststore.jks -alias CARoot -import -file ca-cert 
+
+
+7. Import signed file "cert-signed-broker10" and ca-cert file into keystore file "broker10.keystore.jks"
+
+
+sudo keytool -keystore broker10.keystore.jks -alias broker10 -import -file cert-signed-broker10
+
+
+8.
+sudo vi server.properties 
+
+listeners=SSL://172.31.8.162:9092
+security.inter.broker.protocol = SSL
+ssl.keystore.location=/root/broker10.keystore.jks
+ssl.keystore.password=kafka123
+ssl.key.password=kafka123
+ssl.truststore.location=/root/broker10.truststore.jks
+ssl.truststore.password=kafka123
+ssl.endpoint.identification.algorithm=
+ssl.client.auth=required
+-------------
+
+for client:
+
+1. generate keystore file for each broker:
+
+sudo keytool -keystore mukeshclient.keystore.jks -alias mukeshclient -validity 30 -genkey
+
+vi jaas-kafka-server.conf
+
+KafkaServer {
+    org.apache.kafka.common.security.plain.PlainLoginModule required
+    username="admin"
+    password="admin"
+    user_admin="admin"
+    user_alice="alice"
+    user_bob="bob"
+    user_charlie="charlie";
+};
+
+
+export KAFKA_OPTS="-Djava.security.auth.login.config=/root/kafka_2.12-3.3.1/config/jaas-kafka-server.conf"
+
+
+kafka.security.authorizer.AclAuthorizer
+super.users=User:admin
+
+
+./kafka-acls --authorizer-properties zookeeper.connect=zookeeper:2181 \
+ --add --allow-principal User:alice \
+ --producer --topic demo1
+
+./kafka-acls --authorizer-properties zookeeper.connect=zookeeper:2181 \
+ --add --allow-principal User:alice \
+ --consumer --topic demo1 --group test
+ 
+
+
+./kafka-console-producer --broker-list 192.168.29.82:9093 --topic demo1 --producer.config client-ssl.properties
+
+
+bin/kafka-console-consumer --bootstrap-server kafka1:9093 --topic test --consumer.config client-ssl.properties --from-beginning
+
+
+
+
+
+sudo keytool -keystore kafka.client.keystore.jks -alias client -validity 30 -genkey
+
+sudo keytool -keystore kafka.client.keystore.jks -alias CARoot -import -file ca-cert
+
+sudo keytool -keystore kafka.client.keystore.jks -alias client -certreq -file cert-file-client
+
+
+sudo openssl x509 -req -CA ca-cert -CAkey ca-key -in cert-file-client -out cert-signed-client -days 30 -CAcreateserial -passin pass:kafka123
+
+
+sudo keytool -keystore kafka.client.keystore.jks -alias client -import -file cert-signed-client
+
+
+
+keytool -keystore kafka.client.truststore.jks -alias CARoot -import -file ca-cert
+
+------------
+broker : keystore+singed by CA 
+JAAS >> client/password 
+client >> SSL.properties >> Broker (CA certificate is matching with CA certificate of truststore)
+
+
+
+./kafka-acls --authorizer-properties zookeeper.connect=zookeeper:2181 \
+ --add --allow-principal User:client \
+ --producer --topic demo1
+
+
+./kafka-console-producer --broker-list 192.168.29.82:9093 --topic demo1 --producer.config client-ssl.properties
+--------------------------------------
+
+KafkaServer {
+   org.apache.kafka.common.security.plain.PlainLoginModule required
+   username="kafkabroker"
+   password="kafkabroker-secret"
+   user_kafkabroker="kafkabroker-secret"
+   user_client1="client-secret";
+};
+Client {
+   org.apache.kafka.common.security.plain.PlainLoginModule required
+   username="client"
+   password="client-secret";
+};
+ZooKeeperClient {
+   org.apache.zookeeper.server.auth.DigestLoginModule required
+   username="zookeeper-client"
+   password="secret";
+};
+
+-----------------------------------
+
+MetricBeat/filebeat >> ES >> Kibana
+---------------------
+To monitor Kafka using Grafana and prometheus
+
+wget https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_javaagent/0.9/jmx_prometheus_javaagent-0.9.jar
+
+wget https://github.com/prometheus/jmx_exporter/raw/master/example_configs/kafka-2_0_0.yml
+
+
+export KAFKA_OPTS=-javaagent:/root/jmx_prometheus_javaagent-0.9.jar=7071:/root/kafka-2_0_0.yml
+
+then start the kafka 
+
+Expose Metrics Using Prometheus JMX Exporter
+
+curl http://localhost:7071/metrics
+
+Store Kafka Cluster Metrics in Prometheus:
+
+Download Prometheus:
+
+Edit prometheus.yml in this directory and put following content in it:
+
+global:
+ scrape_interval: 10s
+ evaluation_interval: 10s
+scrape_configs:
+ - job_name: 'kafka'
+   static_configs:
+    - targets:
+      - localhost:7071
+
+Now run Prometheus with the following command:
+./prometheus
+
+Open your browser and go to localhost:9090:
+
+*.**
+
+sudo nano /etc/yum.repos.d/grafana.repo
+
+[grafana]
+name=grafana
+baseurl=https://packages.grafana.com/oss/rpm
+repo_gpgcheck=1
+enabled=1
+gpgcheck=1
+gpgkey=https://packages.grafana.com/gpg.key
+sslverify=1
+sslcacert=/etc/pki/tls/certs/ca-bundle.crt
+
+sudo yum install grafana
+---------------------------
+wget https://dl.grafana.com/oss/release/grafana-7.3.5.linux-amd64.tar.gz
+--------------------
+vi /etc/grafana/grafana.ini
+change localhost to IP address
+
+sudo systemctl daemon-reload
+sudo systemctl start grafana-server
+sudo systemctl status grafana-server
+
+http://192.168.112.139:3000/
+
+username/password: admin/admin
+
+here you can add prometheus as the source 
+
+-----------------------------------------------------
+

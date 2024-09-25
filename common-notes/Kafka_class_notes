@@ -1,0 +1,601 @@
+
+https://innovaccer.zoom.us/j/91307612118 (map)
+
+Message Queue Or PubSub ?
+
+1. APP writes the data into this platfrom, ordering to be preserved
+
+2. Consumer should consume the data in the same order in which it is written 
+
+3. Data should be deleted once consumer has consumed it 
+
+4. Multiple consumers should able to consume the same data 
+
+No of consumers ??
+
+No of incoming messages ?
+
+Consumer tracking?
+Exactly once message delivery  
+--------------------------------------------------------------
+1. Open source 
+2. High scalabity ?
+3. High Availabity ?
+----------------------
+question on manual commits!
+consider there are N nodes attached to a specific topic. now a specific node has received a message...until the manual commit has not been send, no other nodes would receive any message?
+
+how does exactly once delivery is guaranteed**?
+--------------------------------------------------------------
+Jatin banshal:
+I have two questions:
+
+1. In a scenarios where a wildcard matching is done on topic and each topic has 100 partitions, we have atmost 1500 consumer in a single consumer group. Can you please explain how load will be distributed among consumers and how to scale brokers at such load?
+
+2. Does kafka guarantee exactly once delivery even at scale where manual commit time for messages can be in minutes?
+
+Please feel free to answer them when you discuss relevant topic
+
+If we have 100 publisher , 10 partitions in a topic and 4 brokers , does that mean 4 message will published at a time?
+
+-----------------------------
+Abhishek Popet:
+How are we defining no of partitions? What is the best practice for no of partitions?
+-----------------------------------
+
+Master-Slave :
+-------------------------------
+Active Contoller :
+
+Topic(Table)
+
+Sales : 100 million(7 days): Partitions: 1
+      : 6 Partitions, replication-factor: 2
+DDL : create topic, delete topic, changing the properties of the topic >> will be handled by the active contoller 
+-----------------------------------------------------
+
+Write request : Broker 10:
+
+K, value 
+null , Value 
+----------------------------------------------
+
+Break : 10 mins : 12
+
+Sales:
+
+100, "I am Mukesh"
+
+HashCode(100)= 1212 % 6= 0(P0)
+------------------------------
+Default partitioning strategy :
+
+A. Hash partition
+B. Round Robin 
+---------------------------
+T1: 100 request(2): 100 messages(50-50)
+
+Broker10: 50 messages :
+P0(Broker ID: 40) : 10 
+p1: 8
+P2:12
+P3:10
+P4: 12
+P5 : 8
+ 
+-------------------------------
+
+Sales: 6 partitions, replication-factor:3
+Ack: 0/1/ALL
+
+min-insyn-repicas:2
+
+-----------------------------------
+
+
+In syn replica R0 :: P0
+out of syn R1(99) P1(not all messages:100)
+--------------------------------------------------
+k1:: K5
+-----------
+Java App: Sales:
+
+P0: 0,1,2  R0 : 0,1,2
+P2 0
+P1 : 0 
+-------------
+P0
+0,1,2,3,4
+-------------------
+Consumer App: Consumer group ID:
+---------------------------
+Sales: 6 Partitions 
+"Spark Application": Single JVM : 2 Threds
+
+T1:
+P0: 0,1,2
+
+T2:
+P4: 0,1
+P5
+-----------------------
+2nd instance : "Spark Application"
+T1
+P3: 0,1,2,3,4,5
+
+T2:
+P2: 0,1,2,3
+P1: 0,1,2,3,4,5
+----------------------------------
+
+Kafka: __CONSUMER_OFFSET
+
+grpName Instance Host Topic Partition OFFSET current_OFFSER Lag
+Sparkgrp  1     10.1.. Sales   P0      17      23             6
+Sparkgrp  1     10.1.   Sales   P2      19      25             6
+Sparkgrp  1     10..     Sales   P5     21      24             3
+Sparkgrp  2     20..     Sales   P1     11       13            2
+-----------------------------------------------------------
+Compaction Log Topic :
+
+P0: offset(0): 100, "I am Mukesh" T1
+           1: 101,"I am Agam Garg" T1
+         2:    100: "I am Mukesh Kumar" T2
+----------------------------------------------
+P0: offset(0): 100, "I am Mukesh Kumar" T2
+               101, "I am Agam Garg" T1
+-------------------------------------------
+employees: Postgres)
+1,Mukesh,Noida
+-------------------------------------         
+		 
+		 
+key:1, Value: {name: Mukesh,City: BLR}
+key:1, Value: {name: Mukesh,City: Noida}
+---------------------------------------------
+
+tar -xvf kafka_2.11.-2.3.0	
+-------------------------------
+		 
+mkdir /tmp/zookeeper1
+
+mkdir /tmp/zookeeper2
+
+mkdir /tmp/zookeeper3
+
+chmod -R 777 /tmp/zookeeper1
+
+chmod -R 777 /tmp/zookeeper2
+
+chmod -R 777 /tmp/zookeeper3
+
+vi /tmp/zookeeper1/myid
+1
+
+vi /tmp/zookeeper2/myid
+2
+
+vi /tmp/zookeeper3/myid
+3
+--------------------------------------------------
+cp zookeeper.properties zookeeper1.properties 
+cp zookeeper.properties zookeeper2.properties 	 
+-------------------------------------------------
+
+nohup .\zookeeper-server-start.sh ..\config\zookeeper.properties &
+
+nohup .\zookeeper-server-start.sh ..\config\zookeeper1.properties &
+
+
+nohup .\zookeeper-server-start.sh ..\config\zookeeper2.properties &
+----------------------------------------
+mkdir /tmp/kafka1
+mkdir /tmp/kafka2
+mkdir /tmp/kafka3
+mkdir /tmp/kafka4
+
+chmod -R 777 /tmp/kafka1
+chmod -R 777  /tmp/kafka2
+chmod -R 777  /tmp/kafka3
+chmod -R 777  /tmp/kafka4
+---------------------------------
+vi server.properties
+broker.id=10
+broker.rack=RC1
+log.dirs=/tmp/kafka1
+offsets.topic.replication.factor=2
+transaction.state.log.replication.factor=2
+transaction.state.log.min.isr=2
+zookeeper.connect=localhost:2181,localhost:2182,localhost:2183
+group.initial.rebalance.delay.ms=5000
+auto.leader.rebalance.enable=true
+compression.type=lz4
+delete.topic.enable=true
+message.max.bytes=1048588
+min.insync.replicas=2
+num.partitions=2
+------------------------------
+cp server.properties server1.properties
+cp server.properties server2.properties
+cp server.properties server3.properties
+-----------------------------
+nohup .\kafka-server-start.sh ../config/server.properties &
+
+nohup .\kafka-server-start.sh ../config/server1.properties &
+
+nohup .\kafka-server-start.sh ../config/server2.properties &
+
+nohup .\kafka-server-start.sh ../config/server3.properties &
+
+----------------------------------------------------------
+
+./kafka-topics.sh --create --topic demo1 --partitions 6 --replication-factor 2 --bootstrap-server localhost:9093,localhost:9094
+
+./kafka-topics.sh --list --bootstrap-server localhost:9093,localhost:9094
+
+./kafka-reassign-partitions.sh --bootstrap-server localhost:9092 --topics-to-move-json-file move_topics.json --broker-list "10,20,30,40" --generate
+
+
+./kafka-reassign-partitions.sh --bootstrap-server localhost:9092 --reassignment-json-file expand-cluster-reassignment.json --execute
+
+./kafka-reassign-partitions.sh --bootstrap-server localhost:9092 --reassignment-json-file expand-cluster-reassignment.json --verify
+
+
+./kafka-reassign-partitions.sh --bootstrap-server localhost:9092 --topics-to-move-json-file move_topics.json --broker-list "10,20,30" --generate
+
+./kafka-reassign-partitions.bat --bootstrap-server localhost:9092 --topics-to-move-json-file move_topics.json --broker-list "10,20,30" --generate
+
+./kafka-reassign-partitions.sh --bootstrap-server localhost:9092 --reassignment-json-file shrink_cluster.json --execute
+
+
+
+./kafka-reassign-partitions.sh --bootstrap-server localhost:9092 --reassignment-json-file custom-reassignment.json --execute
+-------------------------------------------------------
+./kafka-console-producer.sh --topic demo2 --bootstrap-server localhost:9094
+>
+
+./kafka-console-consumer.sh --topic demo2  --from-beginning --bootstrap-server localhost:9094 --property print.key=true --property print.timestamp=true
+
+
+./kafka-console-consumer.sh --topic demo2  --partition 3 --offset 0 --bootstrap-server localhost:9094 --property print.key=true --property print.timestamp=true
+
+
+./kafka-consumer-groups.sh --list --group --bootstrap-server localhost:9093
+
+./kafka-consumer-groups.sh --describe --group console-consumer-68783 --bootstrap-server localhost:9093
+-------------------------------------------------------------
+BatchID:100
+msgID:1 "data"
+MsgID:2 "data"
+
+Batch2:101
+msgID:1 "data"
+MsgID:2 "data"
+
+Batch:102
+MsgID:3 "data"
+---------------
+Producer : 100 Message :
+Msg1
+----
+Msg100
+
+5 batches :
+
+1 batch: 20 Messages :
+------------------------------
+JavaWalmartApp1: Sales: 2 Partitions 
+-------------------
+Instance1
+--------------
+Instance2
+-------------------------
+JavaWalmartApp1:instance1>> Zookeeper >> Znode(JavaWalmartApp1): t1: P0:: has not send the hearbeat info (30 sec)
+
+
+
+JavaWalmartApp1:Instance2>> Zookeeper >> Znode(JavaWalmartApp1): t1+1: P1
+    : P0 : 18>> 19 
+
+__CONSUMER_OFFSET
+---------
+
+kafka-configs.bat --alter --entity-type topics --entity-name connect-test  --bootstrap-server localhost:9092 --add-config min.insync.replicas=1
+
+name=local-file-source
+connector.class=FileStreamSource
+tasks.max=1
+file=/tmp/test.txt
+topic=connect-test
+transforms=MakeMap,InsertSource
+transforms.MakeMap.type=org.apache.kafka.connect.transforms.HoistField$Value
+transforms.MakeMap.field=line
+transforms.InsertSource.type=org.apache.kafka.connect.transforms.InsertField$Value
+transforms.InsertSource.static.field=company_name
+transforms.InsertSource.static.value=walmart
+-------------------------------------------------
+
+Employees: empid is a primary key: CDC (change data capture): golden gate
+
+10,Mukesh Shukla,BLR
+20,Shrey,Noida
+----------------------
+
+CDC Log file :
+"Insert,ALL","10,Mukesh,BLR"
+"insert,ALL","20,Shrey,Noida"
+"Update,Name","10" "Mukesh","Mukesh Shukla":: Stream
+--------------------------------------------------
+Process: 
+
+Replicate : 
+
+Database : employees: empid
+10,Mukesh Shukla,BLR
+20,Shrey,Noida:: Table 
+----------------
+
+Topic(T1) :: Steam()
+Topic(T2):: Table(T1)
+
+Table :: Stream : Duality 
+---------------------------------
+Rocks DB :: key value DB(Not distributed)
+
+Kafka_topics : 
+
+---------------------------------------------
+rawtextdata
+
+P0
+100 "I am Mukesh"
+200 "I am Shrey"
+100 "I am Mukesh"
+
+
+P1
+300 "I am Akash"
+400 "I am Puneet"
+-----------------------------------
+
+Stream Application
+
+Instance 1: P 1
+
+
+Instance2: P 0
+--------------------------------
+
+StreamBuild builder= new StreamBuilder()
+KStream<String,String> kstram= builder.stream("numbertopic");
+kstram
+ 2,2
+ 3,3
+ 4,4
+ 5,5
+
+Kstream<Number,OldNumber> k1 = kstram.filter((key,value) -> value % 2 !=0)
+
+K1: 3,3
+    5,5,
+	7,7  
+
+k2= k1. SelectKey((k,v) - > 1)
+
+1,3
+1,5
+1,7
+
+k3= k2.groupByKey()
+
+1 <3,5,7>
+
+k3.reduce(v1,v2 -> v1+v2)
+
+1 15:: new topic 
+-----------------------------------
+kafka-mirror-maker.bat --consumer.config ..\..\config\consumer.properties --producer.config ..\..\config\producer.properties --whitelist numbers-topic
+--------------------------------------
+//in the producer.config file mention below cofiguation pointing //to broker of the cluster in which you want replication to be made 
+bootstrap.servers=localhost:9072
+-----------------
+//in the consumer.config file mention below cofiguation pointing //to broker of the cluster from which you want replication to be done
+bootstrap.servers=localhost:9092
+----------------------------------------------------
+Avro schema registery : JAVA 
+ACL 
+Security ?
+Monitoring in Apache kakfa ?
+----------------------------------
+Updating Broker Configs:
+To alter the current broker configs for broker id 0 (for example, the number of log cleaner threads):
+
+bin/kafka-configs.sh --bootstrap-server localhost:9092 --entity-type brokers --entity-name 0 --alter --add-config log.cleaner.threads=2
+
+To describe the current dynamic broker configs for broker id 0:
+
+bin/kafka-configs.sh --bootstrap-server localhost:9092 --entity-type brokers --entity-name 0 --describe
+
+To describe the currently configured dynamic cluster-wide default configs:
+
+bin/kafka-configs.sh --bootstrap-server localhost:9092 --entity-type brokers --entity-default --describe
+
+Updating topic configuration:
+
+bin/kafka-configs.sh --zookeeper localhost:2181 --entity-type topics --entity-name my-topic
+    --alter --add-config max.message.bytes=128000
+To check overrides set on the topic you can do
+
+bin/kafka-configs.sh --zookeeper localhost:2181 --entity-type topics --entity-name my-topic --describe
+
+To remove an override you can do:
+
+bin/kafka-configs.sh --zookeeper localhost:2181  --entity-type topics --entity-name my-topic
+    --alter --delete-config max.message.bytes
+---------------------------
+kafka-consumer-groups.bat --topic SupplierTopic  --group SupplierTopicGroup2 --bootstrap-server localhost:9092 --reset-offsets --to-earliest --execute
+
+kafka-consumer-groups.bat --topic SupplierTopic  --group SupplierTopicGroup2 --bootstrap-server localhost:9092 --reset-offsets -to-offset 2 --execute
+
+--shift-by <positive_or_negative_integer>
+--to-current
+--to-latest
+--to-offset <offset_integer>
+--to-datetime <datetime_string>
+--by-duration <duration_string>
+------------------------
+log.cleanup.policy=compact
+log.cleaner.min.compaction.lag.ms=
+
+auto.leader.rebalance.enable
+leader.imbalance.check.interval.seconds
+leader.imbalance.per.broker.percentage
+---------------------------------------------------------------
+
+kafka-topics.bat --create --topic demo12 --partitions 2 --replication-factor 1 --bootstrap-server localhost:9092 --config cleanup.policy=compact --config max.compaction.lag.ms=1000
+------------------------
+kafka-acls --authorizer-properties zookeeper.connect=zookeeper:2181 \
+ --add --allow-principal User:client1 \
+ --producer --topic test-topic
+
+kafka-acls --authorizer-properties zookeeper.connect=zookeeper:2181 \
+ --add --allow-principal User:client1 \
+ --consumer --topic test-topic --group test
+-----------------------------------
+Generate SSL key and certificate for each Kafka broker:
+
+keytool -keystore kafka.server.keystore.jks -alias localhost -validity {validity} -genkey
+
+Creating your own CA:
+openssl req -new -x509 -keyout ca-key -out ca-cert -days {validity}
+keytool -keystore kafka.client.truststore.jks -alias CARoot -import -file ca-cert
+keytool -keystore kafka.server.truststore.jks -alias CARoot -import -file ca-cert
+
+Signing the certificate:
+keytool -keystore kafka.server.keystore.jks -alias localhost -certreq -file cert-file
+
+openssl x509 -req -CA ca-cert -CAkey ca-key -in cert-file -out cert-signed -days {validity} -CAcreateserial -passin pass:{ca-password}
+
+keytool -keystore kafka.server.keystore.jks -alias CARoot -import -file ca-cert
+
+keytool -keystore kafka.server.keystore.jks -alias localhost -import -file cert-signed
+
+Configuring Kafka Brokers:
+
+listeners=SSL://host.name:port
+
+
+ssl.keystore.location=/var/private/ssl/kafka.server.keystore.jks
+ssl.keystore.password=test1234
+ssl.key.password=test1234
+ssl.truststore.location=/var/private/ssl/kafka.server.truststore.jks
+ssl.truststore.password=test1234
+
+If you want to enable SSL for inter-broker communication, add the following to the broker properties file (it defaults to PLAINTEXT):
+security.inter.broker.protocol = SSL
+
+Once you start the broker you should be able to see in the server.log:
+with addresses: PLAINTEXT -> EndPoint(192.168.64.1,9092,PLAINTEXT),SSL -> EndPoint(192.168.64.1,9093,SSL)
+
+----------------------------------------
+kafka-preferred-replica-election.sh : 
+
+With replication, each partition can have multiple replicas. The list of replicas for a partition is called the "assigned replicas". The first replica in this list is the "preferred replica".
+This tool helps to restore the leadership balance between the brokers in the cluster.
+
+kafka-preferred-replica-election.sh --zookeeper localhost:12913/kafka --path-to-json-file topicPartitionList.json
+
+
+this json can be empty or something like below
+{
+ "partitions":
+  [
+    {"topic": "topic1", "partition": 0},
+    {"topic": "topic1", "partition": 1},
+    {"topic": "topic1", "partition": 2},
+    {"topic": "topic2", "partition": 0},
+    {"topic": "topic2", "partition": 1}
+  ]
+}
+
+StateChangeLogMerger Tool
+---------------- 
+{
+ "partitions":
+  [
+    {"topic": "demo1", "partition": 0},
+    {"topic": "demo1", "partition": 1},
+    {"topic": "demo1", "partition": 2},
+    {"topic": "demo1", "partition": 3},
+    {"topic": "demo1", "partition": 4},
+	{"topic": "demo1", "partition": 5}
+  ]
+}
+
+./kafka-preferred-replica-election.sh --zookeeper localhost:2181 --path-to-json-file rebalance.json
+
+
+./bin/kafka-producer-perf-test --topic demo1 --num-records 200000 --record-size 1000 --throughput 10000000 --producer-props bootstrap.servers=192.168.123.129:9092
+----------------------
+To monitor Kafka using Grafana and prometheus
+
+wget https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_javaagent/0.9/jmx_prometheus_javaagent-0.9.jar
+
+wget https://github.com/prometheus/jmx_exporter/raw/master/example_configs/kafka-2_0_0.yml
+
+
+export KAFKA_OPTS=-javaagent:/home/morteza/myworks/jmx_prometheus_javaagent-0.9.jar=7071:/home/morteza/myworks/kafka-2_0_0.yml
+
+then start the kafka 
+
+Expose Metrics Using Prometheus JMX Exporter
+
+curl http://localhost:7071/metrics
+
+Store Kafka Cluster Metrics in Prometheus:
+
+Download Prometheus:
+
+Edit prometheus.yml in this directory and put following content in it:
+
+global:
+ scrape_interval: 10s
+ evaluation_interval: 10s
+scrape_configs:
+ - job_name: 'kafka'
+   static_configs:
+    - targets:
+      - localhost:7071
+
+Now run Prometheus with the following command:
+./prometheus
+
+Open your browser and go to localhost:9090:
+--------------------
+wget https://github.com/prometheus/prometheus/releases/download/v2.23.0-rc.0/prometheus-2.23.0-rc.0.linux-amd64.tar.gz
+
+tar -xvf prometheus-2.23.0-rc.0.linux-amd64.tar.gz
+
+cd prometheus-*.*
+
+./prometheus
+
+go to grafna and add prometheus as source and then search for below metric 
+
+node_filesystem_avail_bytes
+
+if you want to see prometheus UI then Navigate to localhost:9090/graph you can also IP:9090(No need to change anything)
+----------------
+wget https://dl.grafana.com/oss/release/grafana-7.3.5.linux-amd64.tar.gz
+--------------------
+vi /etc/grafana/grafana.ini
+change localhost to IP address
+
+sudo systemctl daemon-reload
+sudo systemctl start grafana-server
+sudo systemctl status grafana-server
+
+http://192.168.112.139:3000/
+
+username/password: admin/admin
+--------------------------------

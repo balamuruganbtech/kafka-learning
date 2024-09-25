@@ -1,0 +1,219 @@
+
+what is Kafka?
+
+i) Kafka is a messaging queue 
+ii) Kafka is a pubSub platfrom 
+iii) Kafka is a streaming platfrom:  can we consume messages in the form of stream , in order to perform stream processing (CEP)
+
+iV) kafka is a database? No, SQL : KSQL, transaction managment, CR:UD(update and delete not possible), Kafka never allows to perfrorm Random IO,
+
+KSQLDB: helps client using SQL quries to read/write messages into Kafka. KSLDB is only supported in confulent kafka.
+ 
+--------------------------------------------------------
+Messaging platfrom vs PubSub
+
+APPlication >> Publish messages >> Topic (Sales): M1,M2,M3(till retention period)
+                                    >> Queue A >> M3>> RetailsSalesAPP (M1,M2): 
+                                    >> Queue B >>M1,M2,M3    >> OnlineSalesApp
+ 
+PubSub
+ 
+APPlication >> Publish messages >> Topic (Sales)>> consumer (either consumer should manage the offset or let the platfrom manage the offset)
+ 
+Kafka follows this model, and kafka itself going to manage the offset of messages which are consumed by the consumer applications
+------------------------------------------------------------
+ 
+Kafka is higly scalable and higly available platfrom .
+
+Kafka helps consumer application becoming higly scalable. 
+
+Kafka is a open souce software which can be deployed on commidity hardware.
+-------------------------------------------------------------- 
+ 
+-------------------- 
+Kafka use cases: 
+
+A. As a messaging platform for microServices:
+B. As a event processing platfrom for Bigdata 
+--------------------------------------------------------------
+
+Kafka is a clustering platfrom:
+A:Single master , multi workers: RDBMS,Kafka 
+B: multi master ,multi workers : MongoDB
+C: master-less: Cassandra
+-------------------------------
+Master of kafka cluster will be called as ActiveController 
+Worker will be called as broker:
+--------------------------------
+Zookeeper is used as election commionsor and metadata repository . It also generate notification based on the events .
+
+
+ActiveController will handle all the DDL Operations(create/delete/change the property of the topic) 
+
+DML requests(read/write messages into topic) can be handled by any kafka broker.
+----------------------------------------
+
+Producer >> produce the messages : 
+Key:Number, value: Java-inbuild or custom, JSON,AVRO,ProtoBuff
+
+Key: 10
+value ; {salesid:10,pid:100,amount:5000,retailid_51}
+
+Kafka's default partiting logic will be used to decide which message will be written to which partition :
+
+HASH partitioing will be used in case of key-value pair message 
+Round robin will be used in case of key being null.
+----------------------
+
+broker:40 :
+ Key: 10>> HASH Parition(10): hashcode(10) % No of partitions of this topic=
+        = 551 %6= 3(P3, R3)
+		
+replication-factor:3
+min.insync.replicas:2
+
+		
+-----------------	
+replication-factor:3
+min.insync.replicas:2
+
+Producer :
+
+Key: 10
+value ; {salesid:10,pid:100,amount:5000,retailid_51}
+
+ack: 0/1/all	
+
+P3, R3(OSR), R3" >>ack 
+--------------------------------------------------------
+Properties ptr= new Properties();
+ptr.put("bootstrap-servers","10.11.13.40,10.12.13.50");
+
+ptr.put("bootstrap-servers","10.11.13.100");
+
+ptr.put("ack","0/1/all");
+kafkaProducer pd = new KafkaProducer(ptr);
+
+pd.send(new ProducerRecord(sales,key=10,value={salesid:10,pid:100,amount:5000,retailid_51}))
+
+}
+
+ProducerRecord(topic,partition,key,value,timestamp,header);
+----------------------------------------------------------
+2 types of Producers supported in Kafka 
+
+A. Sync producers 
+
+msg >> send() >> broker >> topic(single) >> ack 
+
+for(iteration:100){
+Futrue<RecordMetaData> result=kafkaProducer.send(topic,key,value)
+result.get() // blocking call 
+
+}
+
+msg >> send() >> broker >> custom partition >> topic(multi partitions) >> ack 
+
+
+B. ASync producers 
+ i) fire and forget
+ 
+     ack:all
+	 
+     kafkaProducer.send(topic,key,value)>> send >> HTTP >> batch> broker
+	 
+ 
+ ii) fire and notify 
+ kafkaProducer.send(topic,key,value,callbackObject:onCompletion())
+ 
+---------------------------------------------------------
+props.put("enable.idempotence",true);
+
+Batch1
+key:1 msg1
+key:2 msg2 : written but not ack
+
+Batch2
+key:3 msg3: failed and ack
+key:4 msg4
+
+Batch3
+key:2 msg2 PreviousbatchID: Batch1  :: ack 
+key:5 msg5: write 
+key:3 msg3: PreviousbatchID: Batch2:: write and ack 
+
+----------------------------------
+Kafka provides 3 reading guarantees 
+i) at-most once: latest
+ii) at-least once: from-beginning 
+iii) exactly once :  earliest 
+
+--------------------
+
+App1: latest : 11AM >> 12AM :12.10>> 
+App2: from-beginning
+App3 : earliest
+__consumer_offset 
+--------------------------------------
+
+How many partitions in a topic?
+
+A. Based on size of the partition : 10GB 
+   if we want to store total 10TB data in the topic = 10 * 1024/10 = 1K partitions 
+
+   
+
+B. Based on the velocity:
+      = 2GB /sec 
+	  single partition ~= 100MB /sec 
+	  
+	  then no of partitions = 2*1024/100 = 200 partitions 
+	  
+
+C. Based on client instance :
+     single instance is able to consume= 50MB/sec
+	 
+	 for consuming 2GB /sec : 2*1024/50 = 400 partitions 
+	 
+
+  Max(1k,200,400) : 1K 
+-----------------------------------------
+Kafka streams:
+sales
+
+11 {salesid:11,pid:10,custid:100,amount:5000}
+  
+ -------------------------------
+ count >10 Aggreated: 20K 10% discount
+ 
+  
+Kafka Streams provide support for statefull , mapper and reducer kind of processing.
+
+-----------------------------------------
+
+  Topic >> KTable or KStream
+ 
+once Ktable or Stream are created then we can use Kafka streams API such as filter,map,mapElements, join,union,intersection
+
+some of these functions are like Mapper : example filter, map,mapElements 
+
+some of these functions are shuffling functions : groupBy
+
+some of these functions are like  reducers : count,join,union , intersection
+------------------------------------------------------
+CDC : table or Stream ?
+
+employees : empId as primary key 
+
+Table 						Stream Log
+
+10,"Mukesh","BLR"   >>    10,"Mukesh","BLR"
+11,"Rajesh","Mumbai" >>   11,"Rajesh","Mumbai"
+10,"Mukesh","Delhi"  >>   10,"Mukesh","Delhi"
+  
+--------------------------------------------------
+  
+  
+  
+  
+  

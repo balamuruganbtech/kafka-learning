@@ -1,0 +1,583 @@
+1	user211	Admin@123	https://labs.dmrtechcloud.com	Abhishek Singh
+2	user212	Admin@123	https://labs.dmrtechcloud.com	Aman K Gupta
+3	user213	Admin@123	https://labs.dmrtechcloud.com	Anubhav Rai
+4	user214	Admin@123	https://labs.dmrtechcloud.com	Ashish Ranjan
+5	user215	Admin@123	https://labs.dmrtechcloud.com	Ayush Chaturvadi
+6	user216	Admin@123	https://labs.dmrtechcloud.com	Biswajit Shaw
+7	user217	Admin@123	https://labs.dmrtechcloud.com	Bramendran A
+8	user218	Admin@123	https://labs.dmrtechcloud.com	Harshit Pandey
+9	user219	Admin@123	https://labs.dmrtechcloud.com	Jitin Mishra
+10	user220	Admin@123	https://labs.dmrtechcloud.com	Lakshya Sharma
+11	user221	Admin@123	https://labs.dmrtechcloud.com	Manigandan
+12	user222	Admin@123	https://labs.dmrtechcloud.com	Prapti Ghosh
+13	user223	Admin@123	https://labs.dmrtechcloud.com	Rohit Kumar
+14	user224	Admin@123	https://labs.dmrtechcloud.com	Vishal Gaur
+15	user225	Admin@123	https://labs.dmrtechcloud.com	Mukesh
+16	user226	Admin@123	https://labs.dmrtechcloud.com	Prapti Ghosh
+    user227 Admin@123	https://labs.dmrtechcloud.com Jyoti Sharma
+---------------------------------------------------------------
+Kafka material:
+https://drive.google.com/drive/folders/1DWZA1b3nEwz7pSW0WrBL24SAOl8fO93U?usp=drive_link
+
+kafka's Java project:
+
+https://drive.google.com/drive/folders/18ktVxzNxQRVucxQ_FIikFBi3BzMVTi7M?usp=drive_link
+
+
+
+Eclipse download:
+https://drive.google.com/file/d/1rPwYXAKpm2fjTbdUBOVk1QesG1mjH2Bc/view?usp=drive_link
+
+Java download:
+https://drive.google.com/file/d/19MXf59c15ruqxvEEkW0kT0-_4toW1v49/view?usp=drive_link
+
+JAVA_HOME
+
+C:\Program Files\Java\jdk1.8.0_221
+
+into the PATH variable 
+%JAVA_HOME%\bin
+
+Download putty:
+
+https://the.earth.li/~sgtatham/putty/latest/w64/putty.exe
+
+How to create Kafka cluster :
+
+1. first download the kafka software
+
+sudo wget https://downloads.apache.org/kafka/3.6.0/kafka_2.12-3.6.0.tgz
+
+tar -xvf kafka_2.12-3.6.0.tgz
+
+2.
+
+sudo mkdir -p /tmp/zookeeper1
+sudo mkdir -p /tmp/zookeeper2
+sudo mkdir -p /tmp/zookeeper3
+
+sudo chmod 777 -R /tmp/zookeeper1
+sudo chmod 777 -R /tmp/zookeeper2
+sudo chmod 777 -R /tmp/zookeeper3
+
+cd /root/kafka_2.12-3.6.0/config
+
+sudo vi zookeeper.properties
+
+dataDir=/tmp/zookeeper1
+clientPort=2181
+admin.enableServer=true
+admin.serverPort=8080
+tickTime=2000
+initLimit=5
+syncLimit=2
+server.1=192.168.56.128:2888:3888
+server.2=192.168.56.128:2989:3088
+server.3=192.168.56.128:3089:3188
+autopurge.snapRetainCount=3
+autopurge.purgeInterval=24
+
+cp  zookeeper.properties  zookeeper1.properties
+
+cp  zookeeper.properties  zookeeper2.properties
+
+vi zookeeper1.properties
+dataDir=/tmp/zookeeper2
+clientPort=2182
+admin.enableServer=false
+#admin.serverPort=8080
+tickTime=2000
+initLimit=5
+syncLimit=2
+server.1=192.168.56.128:2888:3888
+server.2=192.168.56.128:2989:3088
+server.3=192.168.56.128:3089:3188
+autopurge.snapRetainCount=3
+autopurge.purgeInterval=24
+
+vi zookeeper2.properties
+dataDir=/tmp/zookeeper3
+clientPort=2183
+admin.enableServer=false
+#admin.serverPort=8080
+tickTime=2000
+initLimit=5
+syncLimit=2
+server.1=192.168.56.128:2888:3888
+server.2=192.168.56.128:2989:3088
+server.3=192.168.56.128:3089:3188
+autopurge.snapRetainCount=3
+autopurge.purgeInterval=24
+
+sudo echo "1" >> /tmp/zookeeper1/myid
+
+-------------------
+sudo echo "2" >> /tmp/zookeeper2/myid
+------------
+sudo echo "3" >> /tmp/zookeeper3/myid
+------------------------------
+cd /root/kafka_2.12-3.6.0/bin
+
+Let's start the zookeeper:
+
+sudo nohup ./zookeeper-server-start.sh ../config/zookeeper.properties &
+
+sudo nohup ./zookeeper-server-start.sh ../config/zookeeper1.properties &
+
+sudo nohup ./zookeeper-server-start.sh ../config/zookeeper2.properties &
+
+------------------------------------------------------
+echo srvr |nc 192.168.56.128 2181 | grep Mode
+echo srvr |nc 192.168.56.128 2182 | grep Mode
+echo srvr |nc 192.168.56.128 2183 | grep Mode
+
+------------------------------------------
+Kafka Admin UI
+
+http://192.168.56.128:8080/commands
+
+----------------------------------
+
+
+sudo mkdir -p /tmp/kafka1
+sudo mkdir -p /tmp/kafka2
+sudo mkdir -p /tmp/kafka3
+sudo mkdir -p /tmp/kafka4
+
+sudo chmod -R 777 /tmp/kafka1
+sudo chmod -R 777 /tmp/kafka2
+sudo chmod -R 777 /tmp/kafka3
+sudo chmod -R 777 /tmp/kafka4
+
+
+cd /root/kafka_2.12-3.6.0/config
+
+vi server.properties
+broker.id=10
+broker.rack= RC1
+listeners=PLAINTEXT://192.168.56.128:9092
+socket.request.max.bytes=104857600               //this restrict batch size to be smaller than 100MB , any batch request gerater than 100 MB will be discarded
+message.max.bytes=1048588
+log.dirs=/tmp/kafka1
+num.partitions=2
+min.insync.replicas=2
+default.replication.factor=3
+offsets.topic.replication.factor=2
+transaction.state.log.replication.factor=2
+transaction.state.log.min.isr=1
+log.flush.interval.messages=10000
+log.flush.interval.ms=1000
+log.retention.hours=168
+log.retention.bytes=1073741824
+auto.leader.rebalance.enable=true  // if you want ActiveController to automatically balance the leader partitions across all the brokers
+zookeeper.connect=192.168.56.128:2181,192.168.56.128:2182,192.168.56.128:2183
+compression.type=lz4
+delete.topic.enable=true
+log.segment.bytes=1073741824
+
+-----------------------------
+cp server.properties server1.properties
+cp server.properties server2.properties
+cp server.properties server3.properties
+
+vi server1.properties
+broker.id=20
+broker.rack=RC1
+listeners=PLAINTEXT://192.168.56.128:9093
+log.dirs=/tmp/kafka2
+
+vi server2.properties
+broker.id=30
+broker.rack=RC2
+listeners=PLAINTEXT://192.168.56.128:9094
+log.dirs=/tmp/kafka3
+
+vi server3.properties
+broker.id=40
+broker.rack=RC2
+listeners=PLAINTEXT://192.168.56.128:9095
+log.dirs=/tmp/kafka4
+-----------------------------------------------------
+
+To run Kakfa broker
+
+cd /root/kafka_2.12-3.6.0/bin
+
+sudo nohup ./kafka-server-start.sh ../config/server.properties &
+
+sudo nohup ./kafka-server-start.sh ../config/server1.properties &
+
+
+sudo nohup ./kafka-server-start.sh ../config/server2.properties &
+
+sudo nohup ./kafka-server-start.sh ../config/server3.properties &
+
+ps -ef|grep kafka
+
+sudo ./zookeeper-shell.sh 192.168.56.128:2181 ls /brokers/ids
+sudo ./zookeeper-shell.sh 192.168.56.128:2181 get /controller
+
+------------------------------------------------------------------------t
+
+create a topic
+
+cd /root/kafka_2.12-3.6.0/bin
+
+./kafka-topics.sh --create --topic demo1 --bootstrap-server 192.168.56.128:9095,192.168.56.128:9094
+
+./kafka-topics.sh --list --bootstrap-server 192.168.56.128:9095,192.168.56.128:9093
+
+./kafka-topics.sh --describe --topic demo1  --bootstrap-server 192.168.56.128:9095,192.168.56.128:9093
+
+./kafka-topics.sh --create --topic demo2 --partitions 4 --replication-factor 2 --bootstrap-server 192.168.56.128:9095,192.168.56.128:9094 --config min.insync.replicas=1
+
+./kafka-topics.sh --describe --topic demo2  --bootstrap-server 192.168.56.128:9095,192.168.56.128:9093
+
+
+
+./kafka-console-producer.sh --topic demo1 --bootstrap-server 192.168.56.128:9092
+
+./kafka-console-consumer.sh --topic demo1 --bootstrap-server 192.168.56.128:9094
+
+./kafka-console-consumer.sh --topic demo1 --bootstrap-server 192.168.56.128:9094 --from-beginning
+
+
+./kafka-console-consumer.sh --topic demo1 --bootstrap-server 192.168.56.128:9094 --partition 1 --offset 0
+
+
+./kafka-get-offsets.sh --topic demo1 --bootstrap-server 192.168.56.128:9095
+
+./kafka-console-consumer.sh --topic demo1 --partition 0 --offset 2 --bootstrap-server 192.168.56.128:9093 --property print.timestamp=true --property print.key=true --property print.partition=true --property print.offset=true
+--------------------
+How to disable firewalld on centoS
+
+sudo systemctl stop firewalld
+sudo systemctl disable firewalld
+---------------------------------------
+
+./kafka-configs.sh --bootstrap-server 192.168.56.128:9092 --entity-type topics --entity-name demo1 --alter --add-config min.insync.replicas=1
+
+
+./kafka-topics.sh --create --topic demo12 --partitions 2 --replication-factor 2 --bootstrap-server 192.168.56.128:9092 --config cleanup.policy=compact --config max.compaction.lag.ms=1000
+
+./kafka-consumer-groups.sh --list --bootstrap-server 192.168.56.128:9092
+
+./kafka-consumer-groups.sh --describe --group walmartJavaApp2 --bootstrap-server 192.168.56.128:9092
+
+
+./kafka-consumer-groups.sh --topic demo1  --group walmartJavaApp2 --bootstrap-server 192.168.56.128:9092 --reset-offsets -to-offset 20 --execute 
+
+./kafka-consumer-groups.sh --topic demo1  --group walmartJavaApp2 --bootstrap-server 192.168.56.128:9092 --reset-offsets --to-earliest --execute
+
+--shift-by <positive_or_negative_integer>
+--to-current
+--to-latest
+--to-offset <offset_integer>
+--to-datetime <datetime_string>
+--by-duration <duration_string>
+---------------------------------
+To increase the number of partitions we can use below command,descrease is not possible
+
+./kafka-topics.sh --bootstrap-server 192.168.56.128:9092 --alter --topic demo1 --partitions 4
+
+./kafka-get-offsets.sh --bootstrap-server 192.168.56.128:9092 --topic demo1
+
+./kafka-topics.sh --create --topic demo3 --replica-assignment 40:10,30:20,30:20 --bootstrap-server 192.168.56.128:9092
+
+//let say we want to change the ownership of partition 1 of the demo1 topic,then first we need to json file and provide below content into it.
+
+vi  partitionmove.json
+{"version":1,
+ "partitions":[
+    {"topic":"demo1",
+     "partition":1,
+     "replicas":[30,20,40]
+    }
+  ]
+}
+
+
+./kafka-reassign-partitions.sh --reassignment-json-file partitionmove.json --execute --bootstrap-server 192.168.56.128:9092
+
+./kafka-reassign-partitions.sh --reassignment-json-file partitionmove.json --verify --bootstrap-server 192.168.56.128:9092
+
+vi topics-to-move.json
+
+
+{
+  "version": 1,
+  "topics": [
+    { "topic": "demo1"},
+        { "topic": "demo2"},
+        { "topic": "demo3"}
+  ]
+}
+
+
+
+./kafka-reassign-partitions.sh -topics-to-move-json-file topics-to-move.json --broker-list "10,20,30,40,50" --generate --bootstrap-server 192.168.56.128:9092
+
+the above command generate a new proposal for all the topics which we mentioned in the "topics-to-move.json" file. let say this proposal in a new file called as "proposal.json"
+
+vi proposal.json
+
+./kafka-reassign-partitions.sh --reassignment-json-file proposal.json --execute --bootstrap-server 192.168.56.128:9092
+
+./kafka-reassign-partitions.sh --reassignment-json-file proposal.json --verify --bootstrap-server 192.168.56.128:9092
+-----------------
+
+vi connect-file-source.properties
+
+name=local-file-source
+connector.class=FileStreamSource
+tasks.max=1
+file=/root/test.txt
+topic=connect-test
+
+vi connect-standalone.properties
+bootstrap.servers=192.168.56.128:9092,192.168.56.128:9093
+offset.storage.file.filename=/root/connect.offsets
+plugin.path=/root/kafka_2.12-3.6.0/libs
+
+./connect-standalone.sh ../config/connect-standalone.properties ../config/connect-file-source.properties
+
+
+./kafka-topics.sh --list --bootstrap-server 192.168.56.128:9092
+./kafka-console-consumer.sh --topic connect-test --from-beginning --bootstrap-server 192.168.56.128:9092
+
+echo "hello kafka how are you" >> /tmp/test.txt
+
+
+
+vi connect-file-sink.properties
+
+file=/root/test.sink.txt
+
+./connect-standalone.sh ../config/connect-standalone.properties ../config/connect-file-sink.properties
+--------------------------------
+
+Confluent kafka download and Install:
+
+curl -O https://packages.confluent.io/archive/7.4/confluent-7.4.0.tar.gz
+
+
+To install Confluent Kafka , we need Java 11
+
+   
+sudo yum install java-11-openjdk-devel
+sudo alternatives --config java
+
+
+curl -O https://packages.confluent.io/archive/7.4/confluent-7.4.0.tar.gz
+
+tar -xvf confluent-7.4.0.tar.gz
+
+export CONFLUENT_HOME=/root/confluent-7.4.0/
+
+cd /root/confluent-7.4.0/bin
+
+./confluent local services start
+
+---------------------------
+to get the list all the subjects (schema) from the schema registry service , we will below Kafka REST API request
+
+curl -X GET http://localhost:8081/subjects
+
+Note:  "http://localhost:8081/subjects" is the endpoint for the SchemaRegistry
+
+//we can schema and its version if we know the name of the subject
+
+curl http://localhost:8081/subjects/pageviews-value/versions/1
+
+{"subject":"pageviews-value","version":1,"id":1,"schema":"{\"type\":\"record\",\"name\":\"pageviews\",\"namespace\":\"ksql\",\"fields\":[{\"name\":\"viewtime\",\"type\":\"long\"},{\"name\":\"userid\",\"type\":\"string\"},{\"name\":\"pageid\",\"type\":\"string\"}],\"connect.name\":\"ksql.pageviews\"}"}
+
+//we can read schema by its unique id as well
+curl http://localhost:8081/schemas/ids/1/
+
+//we can create schema as well by using REST API endpoint of schema registry
+curl -X POST -H "Content-Type: application/vnd.schemaregistry.v1+json" \
+  --data '{ "schema": "{ \"type\": \"record\", \"name\": \"Person\", \"namespace\": \"com.ippontech.kafkatutorials\", \"fields\": [ { \"name\": \"firstName\", \"type\": \"string\" }, { \"name\": \"lastName\", \"type\": \"string\" }, { \"name\": \"birthDate\", \"type\": \"long\" } ]}" }' http://localhost:8081/subjects/persons-avro-value/versions
+  
+curl http://localhost:8081/schemas/ids/10/  
+
+curl http://localhost:8081/subjects/persons-avro-value/versions/1
+
+------------------------------------------------
+To install JDBC source connector 
+
+./confluent-hub install confluentinc/kafka-connect-jdbc:latest
+
+./confluent-hub install confluentinc/kafka-connect-jms:latest
+
+./confluent-hub install confluentinc/kafka-connect-ibmmq:12.x 
+
+----------------
+How to read segment file's content
+
+./kafka-dump-log.sh --print-data-log  --files /tmp/kafka-logs/demo1-0/00000000000000000000.log
+--------------------------
+
+How to enable Authentication and Authorization in Kafka?
+
+https://developer.ibm.com/tutorials/kafka-authn-authz/
+
+Kafka provides authentication and authorization using Kafka Access Control Lists (ACLs) 
+
+1.
+first we need to create "jaas-kafka-server.conf" to mention all the users and their respective passwords.
+
+vi /root/jaas-kafka-server.conf
+KafkaServer {
+    org.apache.kafka.common.security.plain.PlainLoginModule required
+    username="admin"
+    password="admin"
+    user_admin="admin"
+    user_mukesh="mukesh"
+    user_abhi="abhi"
+    user_chand="chand";
+};
+
+2. we need to include the above file into environ vairable "KAFKA_OPTS" by executing below command.
+
+export KAFKA_OPTS="-Djava.security.auth.login.config=/root/jaas-kafka-server.conf"
+
+3. Then we need to modify the server.properties file to enable SASL and authorization . Below lines must be added into server.properties
+
+vi server.properties
+
+authorizer.class.name=kafka.security.authorizer.AclAuthorizer
+listeners=SASL_PLAINTEXT://:9092
+security.inter.broker.protocol= SASL_PLAINTEXT
+sasl.mechanism.inter.broker.protocol=PLAIN
+sasl.enabled.mechanisms=PLAIN
+super.users=User:admin
+--------
+
+4. 
+then restart the kafka broker
+
+5. Let's create individual file containing each user's credentials
+
+vi /root/mukesh.properties
+security.protocol=SASL_PLAINTEXT
+sasl.mechanism=PLAIN
+sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="mukesh" password="mukesh";
+-------
+
+6. 
+Below all these commands will fail since we have't configured ACL yet in Kafka
+
+./kafka-console-producer.sh --bootstrap-server 192.168.56.128:9092 --topic test --producer.config /root/mukesh.properties
+./kafka-console-consumer.sh --bootstrap-server 192.168.56.128:9092 --topic test --group bob-group --consumer.config /root/mukesh.properties
+./kafka-consumer-groups.sh --bootstrap-server 192.168.56.128:9092 --describe --group bob-group --command-config /root/mukesh.properties
+-----------------------
+
+7. Now lets create a credential file "admin.properties" for the admin user who is the super user mentioned in the server.properties
+
+vi /root/admin.properties
+security.protocol=SASL_PLAINTEXT
+sasl.mechanism=PLAIN
+sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="admin" password="admin";
+------------
+
+8. using this admin.properties let's enabel ACL and give permission to user "mukesh"
+
+./kafka-acls.sh --bootstrap-server 192.168.56.128:9097 --command-config /root/admin.properties --add --allow-principal User:mukesh --operation Write --operation Create --topic test
+
+./kafka-acls.sh --bootstrap-server 192.168.56.128:9097 --command-config /root/admin.properties --add --allow-principal User:mukesh --group mukesh-group --operation READ --topic test
+
+9. Now if mukesh user goes and write/read the data into test topic,it should work
+
+./kafka-console-producer.sh --bootstrap-server 192.168.56.128:9097 --topic test --producer.config /root/mukesh.properties
+./kafka-console-consumer.sh --bootstrap-server 192.168.88.128:9097 --topic test --group mukesh-group --consumer.config /root/mukesh.properties
+
+10. 
+ Let's create a file for abhi user
+ 
+ vi /root/abhi.properties
+security.protocol=SASL_PLAINTEXT
+sasl.mechanism=PLAIN
+sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="abhi" password="abhi";
+
+below commands should fail since abhi user is not allowed to read/write into test topic
+
+
+./kafka-console-producer.sh --bootstrap-server 192.168.56.128:9097 --topic test --producer.config /root/abhi.properties
+./kafka-console-consumer.sh --bootstrap-server 192.168.88.128:9097 --topic test --group abhi-group --consumer.config /root/abhi.properties
+
+11. Now let's allow abhi to read the data from test topic
+
+./kafka-acls.sh --bootstrap-server 192.168.56.128:9097 --command-config /root/admin.properties --add --allow-principal User:abhi --group abhi-group --operation READ --topic test
+
+12.
+then below command work and allow abhi user to read the data
+
+./kafka-console-consumer.sh --bootstrap-server 192.168.88.128:9097 --topic test --group abhi-group --consumer.config /root/abhi.properties
+
+--------------------------------------------------------------------
+
+Encryption in Motion:
+
+1. generate keystore file for each broker:
+
+sudo keytool -keystore broker10.keystore.jks -alias broker10 -validity 30 -genkey
+
+2. Setup the CA authroity:
+
+it will generate the certificate of CA : it will give 2 files ca-cert and ca-key
+
+sudo openssl req -new -x509 -keyout ca-key -out ca-cert -days 30
+
+3. Let's import CA certificate "ca-cert" into keystore file of broker10 "broker10.keystore.jks"
+
+sudo keytool -keystore broker10.keystore.jks -alias CARoot -import -file ca-cert
+
+4. Get the public certificate of keystore imported into un-signed file "cert-file-broker10"
+
+sudo keytool -keystore broker10.keystore.jks -alias broker10 -certreq -file cert-file-broker10
+
+5. Get this un-signed file "cert-file-broker10" signed by the CA and provide file "cert-signed-broker10"
+
+sudo openssl x509 -req -CA ca-cert -CAkey ca-key -in cert-file-broker10 -out cert-signed-broker10 -days 30 -CAcreateserial -passin pass:test123
+
+6. Import the CA's cert file into truststore  
+sudo keytool -keystore broker10.truststore.jks -alias CARoot -import -file ca-cert 
+
+7. Import signed file "cert-signed-broker10" and ca-cert file into keystore file "broker10.keystore.jks"
+
+
+sudo keytool -keystore broker10.keystore.jks -alias broker10 -import -file cert-signed-broker10
+
+sudo vi server.properties 
+
+authorizer.class.name=kafka.security.authorizer.AclAuthorizer
+listeners=SASL_PLAINTEXT://localhost:9092
+#security.inter.broker.protocol= SASL_PLAINTEXT
+sasl.mechanism.inter.broker.protocol=SASL_PLAINTEXT
+sasl.enabled.mechanisms=SASL_PLAINTEXT
+super.users=User:admin
+security.protocol=SSL
+ssl.keystore.location=/home/ec2-user/broker0.keystore.jks
+ssl.keystore.password=kafka123
+ssl.key.password=kafka123
+ssl.truststore.location=/home/ec2-user/broker0.truststore.jks
+ssl.truststore.password=kafka123
+ssl.endpoint.identification.algorithm=
+ssl.client.auth=required
+inter.broker.listener.name=SASL_PLAINTEXT
+
+
+
+https://forms.office.com/pages/responsepage.aspx?id=V_ZRmB0asUKEdtyASpXEfvcyYh4O_VtEtbq97N9pUrxURE5MQUtESkU4UlhOS0hKWlo2QzZRNE9JRy4u 
+
+----------------------------
+
+mukesh.shukla@gmail.com
+9880061584
+
+google drive link:
+
+https://drive.google.com/drive/folders/1DWZA1b3nEwz7pSW0WrBL24SAOl8fO93U?usp=drive_link
+
+
+

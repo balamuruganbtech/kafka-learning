@@ -1,0 +1,352 @@
+
+
+Kafka is being used as Messaging platfrom or PubSub.
+
+
+Application >> FIFO order >> Consumer (FIFO)
+
+Topic >> messages >> Queue A >> Client A (msg1,msg2,msg3)
+                  >> Queue B >> Client B(msg1 , msg2)
+				  >> Queue C >> Client C (msg1,msg2,msg3)
+				  
+
+Limitations: High scalabilty is very difficult .
+
+
+PubSub(one to many): Topic >> consumer  A :: Sales(0,1,2,3): 2		
+
+List : 0,1,2,3,4..
+
+Retition Interval: 
+
+  
+Topic : __CONSUMER_OFFSET
+
+At least once , At most once , Exactly once
+------------------------------------------------------
+
+High Scalabilty 
+High Availablity (Replication): Fault Tolerant 
+Open Source software
+can be deployed on the commudity and cloud platfrom
+
+
+AWS Kinesis : Managed services (Ec2 instances)
+  : AWS MSK(Managed service for Kafka)
+  
+Azure PubSub (Azure VM)
+Google PubSub (Google VM)
+
+
+
+Usage cases:
+
+1. MicroServices:
+2. As Big data messaging platfrom 
+-------------------------------
+
+A. Single master and multi workers : RDBMS , Kafka 
+
+in kafka, Master(ActiveController) will handle only DDL request(Create topic,delete topic,changing the property of the topic). ActiveController will not handle DML Operations( writing/reading messages)
+
+
+
+
+B. Multi masters and multi workers :
+
+MongoDB
+
+C. Masterless 
+Cassandra 
+
+
+
+Kafka is a cluster platfrom :
+
+
+Metadata of the kafka cluster will be stored in Zookeeper in the form of Znode
+-- about brokers, topics: partitions, ActiveController >> Zookeeper >> Leader >> majority of the zookeeper
+
+-- Kafka writes the data(messages) into leader partition then messages gets replicated to the replication partitions 
+
+-- if the broker owning the leader partition goes down then ActiveController will promote ISR(In-sync-replica) into the leader partition role 
+
+-- OSR(out-sync-replica) will never be promoted into ActiveController automatically, but if needed admin can promote it manually.
+
+-- promoting OSR(out-sync-replica) into leader partition will cause data loss.
+
+-- if the leader partition can't be elected then read/write operation in that partition will fail forever untill new leader partition get elected.
+
+
+
+--- Kafka never allows read/write(barring one condition) data directly from the replica partition. 
+
+-- single partition of the topic will not provide scalabilty 
+-- we need multi partitions to be created in order to get high scalablity 
+ 
+
+-- ----------------------------------- 
+Kafka's default partitioning Strategy:
+producer >> messages (Key,value) then kafka will use hash partitioning
+       >> messages (null,value) then kafka will use round robin partitioning
+	   
+key:11 value : {"salesid":100,pid:55,amount:2300,city:"BLR"}  topic: Sales 
+
+
+	   
+hashcode(11)>> 1231 % 6= 1(P1:30,R1-A:10,R1-B:40)
+
+
+key:12 value : {"salesid":101,pid:55,amount:2300,city:"HYD"}  topic: Sales   
+
+hashcode(12)= 9876 % 6 = 0 (p0,R0-A,R0-B)
+
+key:13 value : {"salesid":102,pid:55,amount:2300,city:"HYD"}  topic: Sales   
+
+value can be any Java Object , JSON, AVRO, ProtoBof
+
+
+hashcode(12)= 9879 % 6 = 3 (p3,R3-A,R3-B)
+
+-- Producer Application can use custom partiitioning to control which data gets written in which partition 
+
+-- ack: 0/1/All(min.insync.replicas:2)
+
+--------------------
+
+Batch1
+Msg1: key:10, msgID:1
+msg2: key 11: msgID:2: failed >> Zookeeper msgID:2,Batch1 status: sucessful
+
+Batch 2
+msg3: key:12  msgID:1: failed 
+msg4  : key:13 msgID:2
+
+
+Batch3
+msg5  key:14 msgID:1
+
+msg2: key 11: msgID:2,previousBatchID:1:
+msg3: key:12  msgID:1:previousBatchID:2: 
+-------------------------------------------------
+
+demo1 : 2 partitions P0 R0 P1 R1  : consumer : P1 or P0
+: P1(FIFO),P0(FIFO)
+
+0,1,2,3,4 
+
+msg1--msg100 >> batch 
+
+
+P0 msg1,msg3,msg4,msg7
+
+P1 msg2,msg5,msg6,msg8
+
+
+kafka : 
+demo3: single partition 
+
+
+msg1--msg100 >> P0 
+ 
+Producer >> msg2,msg1,msg3>> P0
+
+ 
+Producer >> ASync: fire and forget, fire and notify 
+         >> Sync  :: request >> ack >> request >> P0(message queue)
+		 
+		 
+Producer >> custom partition(mobile::P0,TV:P1 and WM:P2)>> Syn  >>  sales  P0,P1,P2		 
+Write latency will be high , Throughput will be very less 
+	
+
+msg1 :: P0
+msg3
+
+msg2: P1 
+msg4
+
+-----------------------
+
+RDBMS          >> kafka connect >>  Kafka >> kafka connect  >> export >> RDBMS/HDFS
+Key:1, "1,Mukesh,GKP"  T1
+
+Key:1, "1,Mukesh,BLR"  T2
+
+Key:1, "1,Mukesh,HYD"  T3
+
+Append Topic 
+Key:1, "1,Mukesh,GKP"  T1
+
+Key:1, "1,Mukesh,BLR"  T2
+
+Key:1, "1,Mukesh,HYD"  T3
+
+
+compact Topic 
+
+
+
+
+Key:1, "1,Mukesh,HYD"  T3	
+--------------------------------
+ConsumerGroupID:
+
+Reading 4 reading strategies:
+
+1. from-beginning Mode(At least once)
+
+JavaApp: Sales :
+     P0: 17:0
+	 P1 : 21:0
+	 
+	 
+
+2. Latest Mode(at most once)
+
+JavaApp: Sales :
+     P0:  17:215
+	 P1 : 21:280
+
+3. Earliest Mode( exactly once)
+JavaApp: Sales :
+     P0: 17:17
+	 P1 : 21:21
+
+4. Specific offset from the specific partition 
+
+ sales : P1 : 19:72
+---------------------------------------------------
+__CONSUMER_OFFSET topic 
+------------------------------------
+ 
+ Sales : P0, P1,.. P7   walmartJavaApp2,client1, T1  : P0, 
+ 
+                  walmartJavaApp2,client1,T2  : P 1,
+				  
+				  
+				  walmartJavaApp2,client2, T1 : P2,
+				   walmartJavaApp2,client2, T2 : P3
+				   
+				   walmartJavaApp2,client3,T1 : P6
+				     walmartJavaApp2,client3,T2 : P7
+					 
+					 walmartJavaApp2,client4 T1: P4
+					 
+					 walmartJavaApp2,client4 T2: P5
+				   
+				   
+topic sales: 100 partitions : 
+
+               How many max instances with a single thread of the same application ? 100
+			   
+			   
+				  How many max instances with a 2 threads of the same application ? 50
+				  
+				  How many max instances with a 4 threads of the same application ?  25
+				  
+				  
+
+How many partitions in a topic?
+
+   How many messages/sec?
+    60K/sec 
+	A) based on velocity 60K/sec rate 
+	
+	topic : single partition : 5K/sec 
+	   = 60K/sec/5K/sec = 12 Partitions 
+	   
+    B) based on Volume 
+	   500 GB 
+	   
+	   assume each partition to be 10 GB
+	   500/10 = 50 partitions 
+	   
+	   
+   C) based on consumtion rate:
+   
+       single instance with single thread = 2K per sec 
+	   
+	   no of partitions = 60/2k = 30 partitions 
+	 
+    = Max(Pvl,Pvo,Pci)	 
+	 
+  Max(	 12,50,30) = 50
+ 
+------------------
+Kafka
+Zookeeper
+kafka-connect 
+Schema Registry : can store schema of the topic 
+
+REST Proxy: REST API calls will be supported
+
+KSQLDB : topic >> table/stream(schema) >> KSQL quries (not ANSI SQL)
+
+select name from employees wher age >18;
+
+kafka-connect: additional source and sinks are supported
+ 
+ControlCenter: Montioring WEB UI 
+
+support and maintance:
+---------------------------------------------------
+
+Grafana
+
+
+--------------------- 
+JAVA >> Spring boot >> Wrapper (Dead letter service on kafka)
+-----------------------------------------------------------
+	   
+	   {
+  "connect.name": "ksql.pageviews",
+  "fields": [
+    {
+      "name": "viewtime",
+      "type": "long"
+    },
+    {
+      "name": "userid",
+      "type": "string"
+    },
+    {
+      "name": "pageid",
+      "type": "string"
+    }
+  ],
+  "name": "pageviews",
+  "namespace": "ksql",
+  "type": "record"
+}
+
+
+{
+  "connect.name": "ksql.users",
+  "fields": [
+    {
+      "name": "registertime",
+      "type": "long"
+    },
+    {
+      "name": "userid",
+      "type": "string"
+    },
+    {
+      "name": "regionid",
+      "type": "string"
+    },
+    {
+      "name": "gender",
+      "type": "string"
+    }
+  ],
+  "name": "users",
+  "namespace": "ksql",
+  "type": "record"
+}
+
+
+
+curl -X POST -H "Content-Type: application/vnd.schemaregistry.v1+json" \
+  --data '{ "schema": "{ \"type\": \"record\", \"name\": \"Person\", \"namespace\": \"com.ippontech.kafkatutorials\", \"fields\": [ { \"name\": \"firstName\", \"type\": \"string\" }, { \"name\": \"lastName\", \"type\": \"string\" }, { \"name\": \"birthDate\", \"type\": \"long\" } ]}" }' http://localhost:8081/subjects/persons-avro-value/versions
