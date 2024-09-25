@@ -1,0 +1,1626 @@
+To fix the KSQL and straming eclipse error:
+
+1. first import the project into eclipse
+
+2. right click on the error and click on fix me
+2. right click on the error and click on fix me
+
+
+3. click on Maven >> update project
+
+
+--------------------------------
+
+./confluent-hub install --no-prompt confluentinc/kafka-connect-datagen:0.1.0
+
+./confluent start
+
+ http://localhost:9021
+ 
+-----------------------------------------------------
+To create Kafka cluster on single machine: 
+# Start ZooKeeper.  Run this command in its own terminal.
+./bin/zookeeper-server-start ./etc/kafka/zookeeper.properties
+
+# Copy the config files to /tmp
+cp ./etc/kafka/server.properties /tmp/server0.properties
+
+# Add metrics reporter configs (alternatively, we could uncomment the configs)
+echo "" >> /tmp/server0.properties
+echo "metric.reporters=io.confluent.metrics.reporter.ConfluentMetricsReporter" >> /tmp/server0.properties
+echo "confluent.metrics.reporter.bootstrap.servers=localhost:9092" >> /tmp/server0.properties
+echo "confluent.metrics.reporter.topic.replicas=1" >> /tmp/server0.properties
+
+# properties for broker.id=1
+cp /tmp/server0.properties /tmp/server1.properties
+sed -i '' -e "s/broker.id=0/broker.id=1/g" /tmp/server1.properties
+sed -i '' -e "s/9092/9082/g" /tmp/server1.properties
+sed -i '' -e "s/#listen/listen/g" /tmp/server1.properties
+sed -i '' -e "s/kafka-logs/kafka-logs-1/g" /tmp/server1.properties
+
+# properties for broker.id=2
+cp /tmp/server0.properties /tmp/server2.properties
+sed -i '' -e "s/broker.id=0/broker.id=2/g" /tmp/server2.properties
+sed -i '' -e "s/9092/9072/g" /tmp/server2.properties
+sed -i '' -e "s/#listen/listen/g" /tmp/server2.properties
+sed -i '' -e "s/kafka-logs/kafka-logs-2/g" /tmp/server2.properties
+
+# properties for broker.id=3
+cp /tmp/server0.properties /tmp/server3.properties
+sed -i '' -e "s/broker.id=0/broker.id=3/g" /tmp/server3.properties
+sed -i '' -e "s/9092/9062/g" /tmp/server3.properties
+sed -i '' -e "s/#listen/listen/g" /tmp/server3.properties
+sed -i '' -e "s/kafka-logs/kafka-logs-3/g" /tmp/server3.properties
+
+
+# Start Kafka.  Run these commands in a separate terminal.
+./bin/kafka-server-start /tmp/server0.properties &
+./bin/kafka-server-start /tmp/server1.properties &
+./bin/kafka-server-start /tmp/server2.properties &
+./bin/kafka-server-start /tmp/server3.properties &
+
+auto.leader.rebalance.enable=true
+
+Create topics and produce data
+First let’s create a couple of topics, each with 4 partitions and replication factor of 2.
+We intentionally create an unbalanced assignment.
+
+
+./bin/kafka-topics --create --topic topic-a --replica-assignment 0:1,0:1,0:1,0:1
+ --zookeeper localhost:2181
+ 
+./bin/kafka-topics --create --topic topic-b --replica-assignment 1:0,2:1,1:2,2:1 
+--zookeeper localhost:2181
+
+Let’s see how they look.
+
+./bin/kafka-topics --describe --topic topic-a --zookeeper localhost:2181
+
+./bin/kafka-topics --describe --topic topic-b --zookeeper localhost:2181
+
+We’ll now produce some data.
+
+./bin/kafka-producer-perf-test --topic topic-a --num-records 200000 --record-size 1000 --throughput 10000000 --producer-props bootstrap.servers=localhost:9092
+
+./bin/kafka-producer-perf-test --topic topic-b --num-records 800000 --record-size 1000 --throughput 10000000 --producer-props bootstrap.servers=localhost:9092
+
+And finally we’ll force the creation of the offsets topic by running a consumer.
+
+./bin/kafka-consumer-perf-test --topic topic-a --broker-list localhost:9092 --messages 10
+
+Execute the rebalancer
+
+./bin/confluent-rebalancer execute --zookeeper localhost:2181 
+--metrics-bootstrap-server localhost:9092 --throttle 10000000 --verbose
+
+Let’s check the status of the rebalance.
+
+./bin/confluent-rebalancer status --zookeeper localhost:2181
+
+We can now verify that the replica assignment is now balanced.
+
+./bin/kafka-topics --describe --topic topic-a --zookeeper localhost:2181
+
+
+Decommissioning brokers:
+./bin/confluent-rebalancer execute --zookeeper localhost:2181
+ --metrics-bootstrap-server localhost:9092 --throttle 100000 --remove-broker-ids 1
+
+Limiting Bandwidth Usage during Data Migration
+
+./bin/confluent-rebalancer execute --zookeeper localhost:2181 --metrics-bootstrap-server 
+localhost:9092 --throttle 100000
+
+The throttle rate was updated to 100000 bytes/sec.
+A rebalance is currently in progress for:
+        Topic topic-b: 0,1
+----------------------------------------------
+Replication:
+
+
+
+./kafka-topics --create --topic test-topic --replication-factor 1 --partitions 1 --zookeeper localhost:2171
+
+sudo vi /etc/kafka/connect-standalone.properties
+
+bootstrap.servers=localhost:9092
+
+sudo vi /etc/kafka-connect-replicator/quickstart-replicator.properties
+
+name=replicator
+connector.class=io.confluent.connect.replicator.ReplicatorSourceConnector
+tasks.max=4
+
+key.converter=io.confluent.connect.replicator.util.ByteArrayConverter
+value.converter=io.confluent.connect.replicator.util.ByteArrayConverter
+
+src.kafka.bootstrap.servers=localhost:9082
+
+src.zookeeper.connect=localhost:2171
+dest.zookeeper.connect=localhost:2181
+
+topic.whitelist=test-topic
+topic.rename.format=${topic}.replica
+
+-----------------------------------------------
+
+Start kafka connect 
+
+./connect-standalone ../etc/kafka/connect-standalone.properties ../etc/kafka-connect-replicator/quickstart-replicator.properties
+
+./kafka-topics --describe --topic test-topic.replica --zookeeper localhost:2181
+
+./kafka-console-producer --topic test-topic --broker-list localhost:9082
+
+./kafka-console-consumer --from-beginning --topic test-topic.replica --bootstrap-server localhost:9092
+---------------------------------------------------------------------------------------------------------------
+Post Deployment: 
+Logging: /var/log/kafka 
+The logs from the server go to logs/server.log.
+
+You could modify the log4j.properties file and restart your nodes — but that is both tedious and leads to unnecessary downtime
+
+Controller:
+logs/controller.log. Any ERROR, FATAL or WARN in this log indicates an important event that should be looked at by the administrator
+
+State Change Log:
+logs/state-change.log
+Note that the default log level for this log is TRACE.
+
+
+Request logging:Kafka has the facility to log every request served by the broker. This includes not only produce and consume requests, but also requests sent by the controller to brokers and metadata requests.
+If this log is enabled at the DEBUG level, it contains latency information for every request along with the latency breakdown by component, so you can see where the bottleneck is. If this log is enabled at TRACE, it further logs the contents of the request.
+
+We do not recommend you set this log to TRACE for a long period of time as the amount of logging can affect the performance of the cluster.
+
+Admin operations:
+
+Adding topics:If topics are auto-created then you may want to tune the default topic configurations used for auto-created topics. Topics are added and modified using the topic tool:
+
+
+./kafka-topics --zookeeper zk_host:port/chroot --create --topic my_topic_name \
+ --partitions 20 --replication-factor 3 --config x=y
+ 
+Modifying topics:To add partitions you can do
+./kafka-topics --zookeeper zk_host:port/chroot --alter --topic my_topic_name \
+ --partitions 40
+
+To add configs:
+./kafka-topics --zookeeper zk_host:port/chroot --alter --topic my_topic_name --config x=y
+
+remove a config:
+./kafka-topics --zookeeper zk_host:port/chroot --alter --topic my_topic_name \
+ --deleteConfig x 
+ 
+Deleting topics:
+./kafka-topics --zookeeper zk_host:port/chroot --delete --topic my_topic_name 
+ 
+Graceful shutdown: use ./kafka-server-stop.sh
+
+Rolling Restart: If you need to do software upgrades, broker configuration updates, or cluster maintenance, then you will need to restart all the brokers in your Kafka cluster. To do this, you can do a "rolling restart" by restarting one broker at a time. Restarting the brokers one at a time provides high availability by avoiding downtime for end users.
+
+Some considerations to avoid downtime include:
+
+Use Confluent Control Center to monitor broker status during the rolling restart.
+Because one replica is unavailable while a broker is restarting, clients will not experience downtime if the number of remaining in sync replicas is greater than the configured min.insync.replicas.
+Run brokers with controlled.shutdown.enable=true to migrate topic partition leadership before the broker is stopped.
+The active controller should be the last broker you restart. This is to ensure that the active controller is not moved on each broker restart, which would slow down the restart.
+
+Before starting a rolling restart:
+
+1. Verify your cluster is healthy and there are no under replicated partitions. You can check Confluent Control Center in the "System Health" broker tab under "Topic Partitions", and observe the "Under replicated" value. If there are under replicated partitions, investigate why before doing a rolling restart.
+
+2. Identify which Kafka broker in the cluster is the active controller. The active controller will report 1 for the following metric kafka.controller:type=KafkaController,name=ActiveControllerCount and the remaining brokers will report 0.
+
+We recommend the following workflow for rolling restart:
+
+1. Connect to one broker, being sure to leave the active controller for last, and stop the broker process gracefully. Do not send a kill -9 command. Wait until the broker has completely shutdown.
+2.  bin/kafka-server-stop
+
+3. change the config file and than bin/kafka-server-start etc/kafka/server.properties
+
+4. Wait until that broker completed restarts and is caught up before proceeding to restart the next broker in your cluster. Waiting is important to ensure that leader failover happens as cleanly as possible. To know when the broker is caught up, check Confluent Control Center in the "System Health" broker tab under "Topic Partitions", and observe the "Under replicated" value. During broker restart, this number increases because data will not be replicated to topic partitions that reside on the restarting broker.
+
+5. Repeat the above steps on each broker until you have restarted all brokers but the active controller. Now you can restart the active controller.
+
+Scaling the Cluster:
+
+
+
+The open source partition reassignment tool can run in 3 mutually exclusive modes -
+
+--generate: In this mode, given a list of topics and a list of brokers, the tool generates a candidate reassignment to move all partitions of the specified topics to the new brokers. This option merely provides a convenient way to generate a partition reassignment plan given a list of topics and target brokers.
+--execute: In this mode, the tool kicks off the reassignment of partitions based on the user provided reassignment plan. (using the --reassignment-json-file option). This can either be a custom reassignment plan hand crafted by the admin or provided by using the --generate option
+--verify: In this mode, the tool verifies the status of the reassignment for all partitions listed during the last --execute. The status can be either of successfully completed, failed or in progress
+
+Increasing replication factor:
+ cat increase-replication-factor.json
+{"version":1,
+ "partitions":[
+    {"topic":"foo",
+     "partition":0,
+     "replicas":[5,6,7]
+    }
+  ]
+}
+
+bin/kafka-reassign-partitions --zookeeper localhost:2181 --reassignment-json-file  increase-replication-factor.json --execute
+
+Current partition replica assignment
+
+{"version":1,
+ "partitions":[
+    {"topic":"foo",
+     "partition":0,
+     "replicas":[5]
+    }
+  ]
+}
+
+Save this to use as the ``--reassignment-json-file`` option during rollback
+
+Successfully started reassignment of partitions
+{"version":1,
+ "partitions":[
+    {"topic":"foo",
+     "partition":0,
+     "replicas":[5,6,7]
+    }
+  ]
+}
+
+The --verify option can be used with the tool to check the status of the partition reassignment. Note that the same increase-replication-factor.json (used with the --execute option) should be used with the --verify option
+
+./kafka-reassign-partitions --zookeeper localhost:2181 --reassignment-json-file increase-replication-factor.json --verify
+
+//Reassignment of partition [foo,0] completed successfully
+
+Limiting Bandwidth Usage during Data Migration:
+./kafka-reassign-partitions --zookeeper myhost:2181--execute
+--reassignment-json-file bigger-cluster.json —throttle 50000000
+
+Verification:
+The administrator can also validate the assigned configs using the kafka-configs. There are two pairs of throttle configuration used to manage the throttling process. The throttle value itself. This is configured, at a broker level, using the dynamic properties:
+leader.replication.throttled.rate
+follower.replication.throttled.rate
+
+There is also an enumerated set of throttled replicas:
+
+leader.replication.throttled.replicas
+follower.replication.throttled.replicas
+
+which are configured per topic. All four config values are automatically assigned by kafka-reassign-partitions 
+The throttle mechanism works by measuring the received and transmitted rates, for partitions in the replication.throttled.replicas lists, on each broker. These rates are compared to the replication.throttled.rate config to determine if a throttle should be applied. The rate of throttled replication (used by the throttle mechanism) is recorded in the below JMX metrics, so they can be externally monitored.
+
+MBean:kafka.server:type=LeaderReplication,name=byte-rate
+MBean:kafka.server:type=FollowerReplication,name=byte-rate
+Copy
+To view the throttle limit configuration:
+
+  bin/kafka-configs --describe --zookeeper localhost:2181 --entity-type brokers
+Configs for brokers '2' are leader.replication.throttled.rate=1000000,follower.replication.throttled.rate=1000000
+Configs for brokers '1' are leader.replication.throttled.rate=1000000,follower.replication.throttled.rate=1000000
+
+To view the list of throttled replicas:
+./kafka-configs --describe --zookeeper localhost:2181 --entity-type topics
+
+Balancing Replicas Across Racks:
+in the server.properties file , add below line
+broker.rack=my-rack-id
+
+Enforcing Client Quotas:It is also possible to set custom quotas for each client:
+./kafka-configs  --zookeeper localhost:2181 --alter --add-config 'producer_byte_rate=1024,consumer_byte_rate=2048' --entity-name clientA --entity-type clients
+Updated config for clientId: "clientA".
+
+Here's how to describe the quota for a given client:
+./kafka-configs  --zookeeper localhost:2181 --describe --entity-name clientA --entity-type clients
+
+Performance Tips:
+
+1. Picking the number of partitions for a topic
+2.Lagging replicas
+3. Increasing consumer throughput
+
+---------------------------------------------------------------------------------------------------------------------------------
+Monitoring:
+
+Server Metrics
+Broker Metrics
+Confluent Control Center monitors the following important operational broker metrics aggregated across the cluster,
+and per broker or per topic where applicable. Control Center provides built-in dashboards for viewing these metrics, and we recommend that you set alerts at least on the first three.
+
+kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions
+Number of under-replicated partitions (| ISR | < | all replicas |). Alert if value is greater than 0.
+kafka.controller:type=KafkaController,name=OfflinePartitionsCount
+Number of partitions that don’t have an active leader and are hence not writable or readable. Alert if value is greater than 0.
+kafka.controller:type=KafkaController,name=ActiveControllerCount
+Number of active controllers in the cluster. Alert if the aggregated sum across all brokers in the cluster is anything other than 1 because there should be exactly one controller per cluster.
+kafka.server:type=BrokerTopicMetrics,name=BytesInPerSec
+Aggregate incoming byte rate.
+kafka.server:type=BrokerTopicMetrics,name=BytesOutPerSec
+Aggregate outgoing byte rate.
+kafka.network:type=RequestMetrics,name=RequestsPerSec,request={Produce|FetchConsumer|FetchFollower}
+Request rate.
+kafka.server:type=BrokerTopicMetrics,name=TotalProduceRequestsPerSec
+Produce request rate.
+kafka.server:type=BrokerTopicMetrics,name=TotalFetchRequestsPerSec
+Fetch request rate.
+kafka.server:type=BrokerTopicMetrics,name=FailedProduceRequestsPerSec
+Produce request rate for requests that failed.
+kafka.server:type=BrokerTopicMetrics,name=FailedFetchRequestsPerSec
+Fetch request rate for requests that failed.
+kafka.controller:type=ControllerStats,name=LeaderElectionRateAndTimeMs
+Leader election rate and latency.
+kafka.controller:type=ControllerStats,name=UncleanLeaderElectionsPerSec
+Unclean leader election rate.
+kafka.server:type=ReplicaManager,name=PartitionCount
+Number of partitions on this broker. This should be mostly even across all brokers.
+kafka.server:type=ReplicaManager,name=LeaderCount
+Number of leaders on this broker. This should be mostly even across all brokers. If not, set auto.leader.rebalance.enable to true on all brokers in the cluster.
+kafka.server:type=ReplicaFetcherManager,name=MaxLag,clientId=Replica
+Maximum lag in messages between the follower and leader replicas. This is controlled by the replica.lag.max.messages config.
+kafka.server:type=KafkaRequestHandlerPool,name=RequestHandlerAvgIdlePercent
+Average fraction of time the request handler threads are idle. Values are between 0 (all resources are used) and 1 (all resources are available)
+kafka.network:type=SocketServer,name=NetworkProcessorAvgIdlePercent
+Average fraction of time the network processor threads are idle. Values are between 0 (all resources are used) and 1 (all resources are available)
+kafka.network:type=RequestChannel,name=RequestQueueSize
+Size of the request queue. A congested request queue will not be able to process incoming or outgoing requests
+kafka.network:type=RequestMetrics,name=TotalTimeMs,request={Produce|FetchConsumer|FetchFollower}
+Total time in ms to serve the specified request
+kafka.network:type=RequestMetrics,name=RequestQueueTimeMs,request={Produce|FetchConsumer|FetchFollower}
+Time the request waits in the request queue
+kafka.network:type=RequestMetrics,name=LocalTimeMs,request={Produce|FetchConsumer|FetchFollower}
+Time the request is processed at the leader
+kafka.network:type=RequestMetrics,name=RemoteTimeMs,request={Produce|FetchConsumer|FetchFollower}
+Time the request waits for the follower. This is non-zero for produce requests when acks=all
+kafka.network:type=RequestMetrics,name=ResponseQueueTimeMs,request={Produce|FetchConsumer|FetchFollower}
+Time the request waits in the response queue
+kafka.network:type=RequestMetrics,name=ResponseSendTimeMs,request={Produce|FetchConsumer|FetchFollower}
+Time to send the response
+Here are other available metrics you may optionally observe on a Kafka broker.
+
+kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec
+Aggregate incoming message rate.
+kafka.log:type=LogFlushStats,name=LogFlushRateAndTimeMs
+Log flush rate and time.
+kafka.server:type=ReplicaManager,name=IsrShrinksPerSec
+If a broker goes down, ISR for some of the partitions will shrink. When that broker is up again, ISR will be expanded once the replicas are fully caught up. Other than that, the expected value for both ISR shrink rate and expansion rate is 0.
+kafka.server:type=ReplicaManager,name=IsrExpandsPerSec
+When a broker is brought up after a failure, it starts catching up by reading from the leader. Once it is caught up, it gets added back to the ISR.
+kafka.server:type=FetcherLagMetrics,name=ConsumerLag,clientId=([-.\w]+),topic=([-.\w]+),partition=([0-9]+)
+Lag in number of messages per follower replica. This is useful to know if the replica is slow or has stopped replicating from the leader.
+kafka.server:type=DelayedOperationPurgatory,delayedOperation=Produce,name=PurgatorySize
+Number of requests waiting in the producer purgatory. This should be non-zero when acks=all is used on the producer.
+kafka.server:type=DelayedOperationPurgatory,delayedOperation=Fetch,name=PurgatorySize
+Number of requests waiting in the fetch purgatory. This is high if consumers use a large value for fetch.wait.max.ms .
+ZooKeeper Metrics
+Confluent Control Center monitors the following important operational broker metrics relating to ZooKeeper. We expose counts for ZooKeeper state transitions, which can help to spot problems, e.g., with broker sessions to ZooKeeper. The metrics currently show the rate of transitions per second for each one of the possible states. Here is the list of the counters we expose, one for each possible ZooKeeper client states.
+
+kafka.server:type=SessionExpireListener,name=ZooKeeperDisconnectsPerSec
+ZooKeeper client is currently disconnected from the ensemble. The client lost its previous connection to a server and it is currently trying to reconnect. The session is not necessarily expired.
+kafka.server:type=SessionExpireListener,name=ZooKeeperExpiresPerSec
+The ZooKeeper session has expired. When a session expires, we can have leader changes and even a new controller. It is important to keep an eye on the number of such events across a Kafka cluster and if the overall number is high, then we have a few recommendations:
+
+Check the health of your network
+Check for garbage collection issues and tune it accordingly
+If necessary, increase the session time out by setting the value of zookeeper.session.timeout.ms.
+Here are other available ZooKeeper metrics you may optionally observe on a Kafka broker.
+
+kafka.server:type=SessionExpireListener,name=ZooKeeperSyncConnectsPerSec
+ZooKeeper client is connected to the ensemble and ready to execute operations.
+kafka.server:type=SessionExpireListener,name=ZooKeeperAuthFailuresPerSec
+An attempt to connect to the ensemble failed because the client has not provided correct credentials.
+kafka.server:type=SessionExpireListener,name=ZooKeeperReadOnlyConnectsPerSec
+The server the client is connected to is currently LOOKING, which means that it is neither FOLLOWING nor LEADING. Consequently, the client can only read the ZooKeeper state, but not make any changes (create, delete, or set the data of znodes).
+kafka.server:type=SessionExpireListener,name=ZooKeeperSaslAuthenticationsPerSec
+Client has successfully authenticated.
+Producer Metrics
+Starting with 0.8.2, the new producer exposes the following metrics:
+
+Global Request Metrics
+MBean: kafka.producer:type=producer-metrics,client-id=([-.w]+)
+
+request-latency-avg
+The average request latency in ms.
+request-latency-max
+The maximum request latency in ms.
+request-rate
+The average number of requests sent per second.
+response-rate
+The average number of responses received per second.
+incoming-byte-rate
+The average number of incoming bytes received per second from all servers.
+outgoing-byte-rate
+The average number of outgoing bytes sent per second to all servers.
+Global Connection Metrics
+MBean: kafka.producer:type=producer-metrics,client-id=([-.w]+)
+
+connection-count::
+The current number of active connections.
+The current number of active connections.
+connection-creation-rate
+New connections established per second in the window.
+connection-close-rate
+Connections closed per second in the window.
+
+io-ratio
+The fraction of time the I/O thread spent doing I/O.
+io-time-ns-avg
+The average length of time for I/O per select call in nanoseconds.
+io-wait-ratio
+The fraction of time the I/O thread spent waiting.
+select-rate
+Number of times the I/O layer checked for new I/O to perform per second.
+io-wait-time-ns-avg
+The average length of time the I/O thread spent waiting for a socket ready for reads or writes in nanoseconds.
+
+Per-Broker Metrics
+MBean: kafka.producer:type=producer-node-metrics,client-id=([-.w]+),node-id=([0-9]+)
+
+Besides the Global Request Metrics, the following metrics are also available per broker:
+
+request-size-max
+The maximum size of any request sent in the window for a broker.
+request-size-avg
+The average size of all requests in the window for a broker.
+request-rate
+The average number of requests sent per second to the broker.
+response-rate
+The average number of responses received per second from the broker.
+incoming-byte-rate
+The average number of bytes received per second from the broker.
+outgoing-byte-rate
+The average number of bytes sent per second to the broker.
+
+Per-Topic Metrics
+MBean: kafka.producer:type=producer-topic-metrics,client-id=([-.w]+),topic=([-.w]+)
+
+Besides the Global Request Metrics, the following metrics are also available per topic:
+
+byte-rate
+The average number of bytes sent per second for a topic.
+record-send-rate
+The average number of records sent per second for a topic.
+compression-rate
+The average compression rate of record batches for a topic.
+record-retry-rate
+The average per-second number of retried record sends for a topic.
+record-error-rate
+The average per-second number of record sends that resulted in errors for a topic.
+New Consumer Metrics
+Starting with Kafka 0.9.0.0, the new consumer exposes the following metrics:
+
+Fetch Metrics
+MBean: kafka.consumer:type=consumer-fetch-manager-metrics,client-id=([-.w]+)
+
+records-lag-max
+The maximum lag in terms of number of records for any partition in this window. An increasing value over time is your best indication that the consumer group is not keeping up with the producers.
+fetch-size-avg
+The average number of bytes fetched per request.
+fetch-size-max
+The average number of bytes fetched per request.
+bytes-consumed-rate
+The average number of bytes consumed per second.
+records-per-request-avg
+The average number of records in each request.
+records-consumed-rate
+The average number of records consumed per second.
+fetch-rate
+The number of fetch requests per second.
+fetch-latency-avg
+The average time taken for a fetch request.
+fetch-latency-max
+The max time taken for a fetch request.
+fetch-throttle-time-avg
+The average throttle time in ms. When quotas are enabled, the broker may delay fetch requests in order to throttle a consumer which has exceeded its limit. This metric indicates how throttling time has been added to fetch requests on average.
+fetch-throttle-time-max
+The maximum throttle time in ms.
+Topic-level Fetch Metrics
+MBean: kafka.consumer:type=consumer-fetch-manager-metrics,client-id=([-.w]+),topic=([-.w]+)
+
+fetch-size-avg
+The average number of bytes fetched per request for a specific topic.
+fetch-size-max
+The maximum number of bytes fetched per request for a specific topic.
+bytes-consumed-rate
+The average number of bytes consumed per second for a specific topic.
+records-per-request-avg
+The average number of records in each request for a specific topic.
+records-consumed-rate
+The average number of records consumed per second for a specific topic.
+Consumer Group Metrics
+MBean: kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.w]+)
+
+assigned-partitions
+The number of partitions currently assigned to this consumer.
+commit-latency-avg
+The average time taken for a commit request.
+commit-latency-max
+The max time taken for a commit request.
+commit-rate
+The number of commit calls per second.
+join-rate
+The number of group joins per second. Group joining is the first phase of the rebalance protocol. A large value indicates that the consumer group is unstable and will likely be coupled with increased lag.
+join-time-avg
+The average time taken for a group rejoin. This value can get as high as the configured session timeout for the consumer, but should usually be lower.
+join-time-max
+The max time taken for a group rejoin. This value should not get much higher than the configured session timeout for the consumer.
+sync-rate
+The number of group syncs per second. Group synchronization is the second and last phase of the rebalance protocol. Similar to join-rate, a large value indicates group instability.
+sync-time-avg
+The average time taken for a group sync.
+sync-time-max
+The max time taken for a group sync.
+heartbeat-rate
+The average number of heartbeats per second. After a rebalance, the consumer sends heartbeats to the coordinator to keep itself active in the group. You can control this using the heartbeat.interval.ms setting for the consumer. You may see a lower rate than configured if the processing loop is taking more time to handle message batches. Usually this is OK as long as you see no increase in the join rate.
+heartbeat-response-time-max
+The max time taken to receive a response to a heartbeat request.
+last-heartbeat-seconds-ago
+The number of seconds since the last controller heartbeat.
+Global Request Metrics
+MBean: kafka.consumer:type=consumer-metrics,client-id=([-.w]+)
+
+request-latency-avg
+The average request latency in ms.
+request-latency-max
+The maximum request latency in ms.
+request-rate
+The average number of requests sent per second.
+response-rate
+The average number of responses received per second.
+incoming-byte-rate
+The average number of incoming bytes received per second from all servers.
+outgoing-byte-rate
+The average number of outgoing bytes sent per second to all servers.
+Global Connection Metrics
+MBean: kafka.consumer:type=consumer-metrics,client-id=([-.w]+)
+
+connection-count
+The current number of active connections.
+connection-creation-rate
+New connections established per second in the window.
+connection-close-rate
+Connections closed per second in the window.
+io-ratio
+The fraction of time the I/O thread spent doing I/O.
+io-time-ns-avg
+The average length of time for I/O per select call in nanoseconds.
+io-wait-ratio
+The fraction of time the I/O thread spent waiting.
+select-rate
+Number of times the I/O layer checked for new I/O to perform per second.
+io-wait-time-ns-avg
+The average length of time the I/O thread spent waiting for a socket ready for reads or writes in nanoseconds.
+Per-Broker Metrics
+MBean: kafka.consumer:type=consumer-node-metrics,client-id=([-.w]+),node-id=([0-9]+)
+
+Besides the Global Request Metrics, the following metrics are also available per broker:
+
+request-size-max
+The maximum size of any request sent in the window for a broker.
+request-size-avg
+The average size of all requests in the window for a broker.
+request-rate
+The average number of requests sent per second to the broker.
+response-rate
+The average number of responses received per second from the broker.
+incoming-byte-rate
+The average number of bytes received per second from the broker.
+outgoing-byte-rate
+The average number of bytes sent per second to the broker.
+Old Consumer Metrics
+kafka.consumer:type=ConsumerFetcherManager,name=MaxLag,clientId=([-.\w]+)
+Number of messages the consumer lags behind the producer by.
+kafka.consumer:type=ConsumerFetcherManager,name=MinFetchRate,clientId=([-.\w]+)
+The minimum rate at which the consumer sends fetch requests to the broker. If a consumer is dead, this value drops to roughly 0.
+kafka.consumer:type=ConsumerTopicMetrics,name=MessagesPerSec,clientId=([-.\w]+)
+The throughput in messages consumed per second.
+kafka.consumer:type=ConsumerTopicMetrics,name=MessagesPerSec,clientId=([-.\w]+)
+The throughput in bytes consumed per second.
+The following metrics are available only on the high-level consumer:
+
+kafka.consumer:type=ZookeeperConsumerConnector,name=KafkaCommitsPerSec,clientId=([-.\w]+)
+The rate at which this consumer commits offsets to Kafka. This is only relevant if offsets.storage=kafka.
+kafka.consumer:type=ZookeeperConsumerConnector,name=ZooKeeperCommitsPerSec,clientId=([-.\w]+)
+The rate at which this consumer commits offsets to ZooKeeper. This is only relevant if offsets.storage=zookeeper. Monitor this value if your ZooKeeper cluster is under performing due to high write load.
+kafka.consumer:type=ZookeeperConsumerConnector,name=RebalanceRateAndTime,clientId=([-.\w]+)
+The rate and latency of the rebalance operation on this consumer.
+kafka.consumer:type=ZookeeperConsumerConnector,name=OwnedPartitionsCount,clientId=([-.\w]+),groupId=([-.\w]+)
+The number of partitions owned by this consumer.
+---------------------------------------------------------------
+
+------------------------------------------------------
+https://docs.confluent.io/current
+
+Kafka offset Monitor:
+
+This is an app to monitor your kafka consumers and their position (offset) in the queue.
+
+You can see the current consumer groups, for each group the topics that they are consuming and the position of the group in each topic queue. This is useful to understand how quick you are consuming from a queue and how fast the queue is growing. It allows for debuging kafka producers and consumers or just to have an idea of what is going on in your system.
+
+The app keeps an history of queue position and lag of the consumers so you can have an overview of what has happened in the last days.
+
+This is a small webapp, you can run it locally or on a server, as long as you have access to the ZooKeeper nodes controlling kafka
+
+java -cp KafkaOffsetMonitor-assembly-0.2.1.jar \
+     com.quantifind.kafka.offsetapp.OffsetGetterWeb \
+     --zk zk-server1,zk-server2 \
+     --port 8080 \
+     --refresh 10.seconds \
+     --retain 2.days
+	 
+	 The arguments are:
+
+ zk the ZooKeeper hosts
+ port on what port will the app be available
+ refresh how often should the app refresh and store a point in the DB
+ retain how long should points be kept in the DB
+ dbName where to store the history (default 'offsetapp')
+ --------------------------------------------------------------
+Kafka eco-system
+Kafka Connect
+Kafka has a built-in framework called Kafka Connect for writing sources and sinks that either continuously ingest data into Kafka or continuously ingest data in Kafka into external systems. The connectors themselves for different applications or data systems are federated and maintained separately from the main code base. You can find a list of available connectors at the Kafka Connect Hub.
+
+Distributions & Packaging
+Confluent Platform - http://confluent.io/product/. Downloads - http://confluent.io/downloads/.
+Cloudera Kafka source (0.11.0) https://github.com/cloudera/kafka/tree/cdh5-1.0.1_3.1.0 and release http://archive.cloudera.com/kafka/parcels/3.1.0/
+Hortonworks Kafka source and release http://hortonworks.com/hadoop/kafka/
+Stratio Kafka source for ubuntu http://repository.stratio.com/sds/1.1/ubuntu/13.10/binary/ and for RHEL http://repository.stratio.com/sds/1.1/RHEL/
+IBM Event Streams - https://www.ibm.com/cloud/event-streams - Apache Kafka on premise and the public cloud
+Strimzi - http://strimzi.io/ - Apache Kafka Operator for Kubernetes and Openshift. Downloads and Helm Chart - https://github.com/strimzi/strimzi-kafka-operator/releases/latest 
+TIBCO Messaging - Apache Kafka Distribution - https://www.tibco.com/products/apache-kafka Downloads - https://www.tibco.com/products/tibco-messaging/downloads
+
+
+Stream Processing
+
+Kafka Streams - the built-in stream processing library of the Apache Kafka project
+Documentation in Apache Kafka
+Documentation in Confluent Platform
+
+Kafka Streams code examples in Apache Kafka
+Kafka Streams code examples provided by Confluent
+
+Kafka Streams Ecosystem:
+Complex Event Processing (CEP): https://github.com/fhussonnois/kafkastreams-cep.
+Storm - A stream-processing framework.
+Samza - A YARN-based stream processing framework.
+Storm Spout - Consume messages from Kafka and emit as Storm tuples
+Kafka-Storm - Kafka 0.8, Storm 0.9, Avro integration
+
+SparkStreaming - Kafka receiver supports Kafka 0.8 and above
+Flink - Apache Flink has an integration with Kafka
+IBM Streams - A stream processing framework with Kafka source and sink to consume and produce Kafka messages 
+Spring Cloud Stream - a framework for building event-driven microservices, Spring Cloud Data Flow - a cloud-native orchestration service for Spring Cloud Stream applications
+Apache Apex - Stream processing framework with connectors for Kafka as source and sink.
+
+
+Hadoop Integration
+Confluent HDFS Connector - A sink connector for the Kafka Connect framework for writing data from Kafka to Hadoop HDFS
+Camus - LinkedIn's Kafka=>HDFS pipeline. This one is used for all data at LinkedIn, and works great.
+Kafka Hadoop Loader A different take on Hadoop loading functionality from what is included in the main distribution.
+Flume - Contains Kafka source (consumer) and sink (producer)
+KaBoom - A high-performance HDFS data loader
+
+
+Database Integration
+Confluent JDBC Connector - A source connector for the Kafka Connect framework for writing data from RDBMS (e.g. MySQL) to Kafka
+Oracle Golden Gate Connector - Source connector that collects CDC operations via Golden Gate and writes them to Kafka
+
+Search and Query
+ElasticSearch - This project, Kafka Standalone Consumer will read the messages from Kafka, processes and index them in ElasticSearch. There are also several Kafka Connect connectors for ElasticSeach.
+Presto - The Presto Kafka connector allows you to query Kafka in SQL using Presto.
+Hive - Hive SerDe that allows querying Kafka (Avro only for now) using Hive SQL
+
+
+Management Consoles
+Kafka Manager - A tool for managing Apache Kafka.
+kafkat - Simplified command-line administration for Kafka brokers.
+Kafka Web Console - Displays information about your Kafka cluster including which nodes are up and what topics they host data for.
+Kafka Offset Monitor - Displays the state of all consumers and how far behind the head of the stream they are.
+Capillary – Displays the state and deltas of Kafka-based Apache Storm topologies. Supports Kafka >= 0.8. It also provides an API for fetching this information for monitoring purposes.
+Doctor Kafka - Service for cluster auto healing and workload balancing.
+Cruise Control - Fully automate the dynamic workload rebalance and self-healing of a Kafka cluster.
+Burrow - Monitoring companion that provides consumer lag checking as a service without the need for specifying thresholds.
+Chaperone - An audit system that monitors the completeness and latency of data stream.
+
+
+AWS Integration
+Automated AWS deployment
+Kafka -> S3 Mirroring tool from Pinterest.
+Alternative Kafka->S3 Mirroring tool
+
+
+Logging
+syslog (1M)
+syslog producer : A producer that supports both raw data and protobuf with meta data for deep analytics usage. 
+syslog-ng (https://syslog-ng.org/) is one of the most widely used open source log collection tools, capable of filtering, classifying, parsing log data and forwarding it to a wide variety of destinations. Kafka is a first-class destination in the syslog-ng tool; details on the integration can be found at https://czanik.blogs.balabit.com/2015/11/kafka-and-syslog-ng/ .
+klogd - A python syslog publisher
+klogd2 - A java syslog publisher
+Tail2Kafka - A simple log tailing utility
+Fluentd plugin - Integration with Fluentd
+
+
+Remote log viewer
+LogStash integration - Integration with LogStash and Fluentd
+Syslog Collector written in Go
+Klogger - A simple proxy service for Kafka.
+fuse-kafka: A file system logging agent based on Kafka
+omkafka: Another syslog integration, this one in C and uses librdkafka library
+logkafka - Collect logs and send lines to Apache Kafka
+Flume - Kafka plugins
+Flume Kafka Plugin - Integration with Flume
+Kafka as a sink and source in Flume - Integration with Flume
+
+
+Metrics
+Mozilla Metrics Service - A Kafka and Protocol Buffers based metrics and logging system
+Ganglia Integration
+SPM for Kafka
+Coda Hale Metric Reporter to Kafka
+kafka-dropwizard-reporter - Register built-in Kafka client and stream metrics to Dropwizard Metrics
+Packing and Deployment
+
+
+RPM packaging
+Debian packaginghttps://github.com/tomdz/kafka-deb-packaging
+Puppet Integration
+https://github.com/miguno/puppet-kafka
+https://github.com/whisklabs/puppet-kafka
+Dropwizard packaging
+Kafka Camel Integration
+https://github.com/ipolyzos/camel-kafka
+https://github.com/BreizhBeans/camel-kafka
+
+
+Misc.
+Kafka Websocket - A proxy that interoperates with websockets for delivering Kafka data to browsers.
+KafkaCat - A native, command line producer and consumer.
+Kafka Mirror - An alternative to the built-in mirroring tool
+
+
+Ruby Demo App 
+Apache Camel Integration
+Infobright integration
+Riemann Consumer of Metrics
+stormkafkamom – curses-based tool which displays state of Apache Storm based Kafka consumers (Kafka 0.7 only).
+uReplicator - Provides the ability to replicate across Kafka clusters in other data centers
+Mirus - A tool for distributed, high-volume replication between Apache Kafka clusters based on Kafka Connect
+--------------------------------------------------------------------------
+
+Confluent eco-system:
+
+Control Center:
+Delivers a comprehensive monitoring and management system for both developers and operations teams.
+
+Kafka-Clients::
+Supports Kafka integration using C/C++, Python, Go, and .NET
+
+Connectors:
+Offers connectors developed and supported by Confluent
+
+KSQL:
+Enables stream processing against Apache Kafka using SQL-like semantics
+
+REST Proxy:
+Provides universal access to Kafka from any network connected device via HTTP
+
+Security features:
+Enable pass through client credentials from REST Proxy / Schema Registry to Kafka broker. Map AD/LDAP groups to Kafka ACLs
+
+MQTT : 
+Enable pass through client credentials from REST Proxy / Schema Registry to Kafka broker. Map AD/LDAP groups to Kafka ACLs
+
+Kafka Stream API:
+Offers a simple library that enables streaming application development within the Kafka framework
+
+Kafka Connect API:
+Delivers an advanced API for connecting external sources and destinations into Kafka.
+
+Auto Data Balancer:
+Optimizes resource utilization through a rack-aware algorithm that rebalances partitions across a Kafka cluster.
+
+Replicator::
+Enables replication across data centers and public clouds for disaster recovery and distributed data pipelines.
+---------------------------------------------------------
+
+Control center:  
+
+Monitoring: 
+    System Health: Brokers and Topics level metrics. Total partition, how many are online, offline and under replicated. In syn replica and out of syn replica. You can also see which partition is assigned to which broker as well.
+	Data Stream.
+	
+	When system is near capacity, we monitor 3 things:Network pool usage, Request pool usage and Request latency. For network(throughput) , for disk utilization you look disk space utilization
+	
+	Data stream: help monitoring whether all the streams were delivered from producer to consumer in a timely manner. You can monitor any pair of producer and consumer from end to end . Streaming metrics are available at cluster, consumer group and for a topic.Consumer lag is important to monitor to latency requirement.
+
+Management : 	
+  Kafka connected
+  Clusters
+  Topics
+  
+Alerts:
+  Overview:We can crate specific and custom alerts
+  Integration:
+  
+
+KSQL is the streaming SQL engine for Apache Kafka®. It provides an easy-to-use yet powerful interactive SQL interface for stream processing on Kafka, without the need to write code in a programming language such as Java or Python. KSQL is scalable, elastic, fault-tolerant, and real-time. It supports a wide range of streaming operations, including data filtering, transformations, aggregations, joins, windowing, and sessionization
+
+confluent start
+ksql-datagen -daemon quickstart=clickstram format=json topic=clickstream maxInterval=100 iterations=5000  
+
+ksql
+
+https://www.michael-noll.com/blog/2018/04/05/of-stream-and-tables-in-kafka-and-stream-processing-part1/
+
+
+create STREAM clickstream(_time timestamp, time varchar,ip varchar,request varchar, status int,userid int,bytes bigint,agent varchar) WITH KAFKA_TOPIC='clickstream',VALUE_FORMAT='JSON');
+
+Data enrichment : Join examples
+
+---------------------------------------------------------
+
+Kafka Schema registry:
+
+
+import io.confluent.kafka.serializers.KafkaAvroSerializer;
+import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig;
+
+...
+props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, KafkaAvroSerializer.class);
+props.put(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, schemaRegistryUrl);
+...
+
+...
+KafkaProducer<String, Payment> producer = new KafkaProducer<String, Payment>(props));
+final Payment payment = new Payment(orderId, 1000.00d);
+final ProducerRecord<String, Payment> record = new ProducerRecord<String, Payment>(TOPIC, payment.getId().toString(), payment);
+producer.send(record);
+...
+
+
+--------------------
+$ mvn clean compile package
+$ mvn exec:java -Dexec.mainClass=io.confluent.examples.clients.basicavro.ProducerExample
+------------------------------------
+Consumer:
+import io.confluent.kafka.serializers.KafkaAvroDeserializer;
+import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig;
+
+...
+props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, KafkaAvroDeserializer.class);
+props.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, true);
+props.put(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, schemaRegistryUrl);
+...
+
+...
+KafkaConsumer<String, Payment> consumer = new KafkaConsumer<>(props));
+consumer.subscribe(Collections.singletonList(TOPIC));
+while (true) {
+  ConsumerRecords<String, Payment> records = consumer.poll(100);
+  for (ConsumerRecord<String, Payment> record : records) {
+    String key = record.key();
+    Payment value = record.value();
+  }
+}
+
+-------------------------------
+View all the subjects registered in Schema Registry (assuming Schema Registry is running on the local machine listening on port 8081):
+
+ curl --silent -X GET http://localhost:8081/subjects/ | jq .
+ 
+In this example, the Kafka topic transactions has messages whose value, i.e., payload, is Avro. View the associated subject transactions-value in Schema Registry:
+
+$ curl --silent -X GET http://localhost:8081/subjects/transactions-value/versions/latest | jq .
+{
+  "subject": "transactions-value",
+  "version": 1,
+  "id": 1,
+  "schema": "{\"type\":\"record\",\"name\":\"Payment\",\"namespace\":\"io.confluent.examples.clients.basicavro\",\"fields\":[{\"name\":\"id\",\"type\":\"string\"},{\"name\":\"amount\",\"type\":\"double\"}]}"
+}
+
+
+If you are using Confluent Control Center, you can view the topic schema easily from the UI, and inspect new data arriving into the topic:
+
+
+Schema IDs in Messages
+Integration with Confluent Schema Registry means that Kafka messages do not need to be written with the entire Avro schema. Instead, Kafka messages are written with the schema id. The producers writing the messages and the consumers reading the messages must be using the same Schema Registry to get the same mapping between a schema and schema id.
+
+In this example, a producer sends the new schema for Payments to Schema Registry. Schema Registry registers this schema Payments to the subject transactions-value, and returns the schema id of 1 to the producer. The producer caches this mapping between the schema and schema id for subsequent message writes, so it only contacts Schema Registry on the first schema write. When a consumer reads this data, it sees the Avro schema id of 1 and sends a schema request to Schema Registry. Schema Registry retrieves the schema associated to schema id 1, and returns the schema to the consumer. The consumer caches this mapping between the schema and schema id for subsequent message reads, so it only contacts Schema Registry the on first schema id read.
+
+Auto Schema Registration
+By default, client applications automatically register new schemas. If they produce new messages to a new topic, then they will automatically try to register new schemas. This is very convenient in development environments, but in production environments we recommend that client applications do not automatically register new schemas. Register schemas outside of the client application to control when schemas are registered with Confluent Schema Registry and how they evolve.
+
+Within the application, disable automatic schema registration by setting the configuration parameter auto.register.schemas=false, as shown in the example below.
+
+props.put(AbstractKafkaAvroSerDeConfig.AUTO_REGISTER_SCHEMAS, false);
+Copy
+To manually register the schema outside of the application, send the schema to Schema Registry and associate it with a subject, in this case transactions-value. It returns a schema id of 1.
+
+$ curl -X POST -H "Content-Type: application/vnd.schemaregistry.v1+json" --data '{"schema": "{\"type\":\"record\",\"name\":\"Payment\",\"namespace\":\"io.confluent.examples.clients.basicavro\",\"fields\":[{\"name\":\"id\",\"type\":\"string\"},{\"name\":\"amount\",\"type\":\"double\"}]}"}' http://localhost:8081/subjects/transactions-value/versions
+{"id":1}
+Copy
+Schema Evolution and Compatibility
+Changing Schemas
+So far in this tutorial, you have seen the benefit of Confluent Schema Registry as being centralized schema management that enables client applications to register and retrieve globally unique schema ids. The main value of Schema Registry, however, is in enabling schema evolution. Similar to how APIs evolve and need to be compatible for all applications that rely on old and new versions of the API, schemas also evolve and likewise need to be compatible for all applications that rely on old and new versions of a schema. This schema evolution is a natural behavior of how applications and data develop over time.
+
+Confluent Schema Registry allows for schema evolution and provides compatibility checks to ensure that the contract between producers and consumers is not broken. This allows producers and consumers to update independently and evolve their schemas independently, with assurances that they can read new and legacy data. This is especially important in Kafka because producers and consumers are decoupled applications that are sometimes developed by different teams.
+
+Transitive compatibility checking is important once you have more than two versions of a schema for a given subject. If compatibility is configured as transitive, then it checks compatibility of a new schema against all previously registered schemas; otherwise, it checks compatibility of a new schema only against the latest schema.
+
+For example, if there are three schemas for a subject that change in order X-2, X-1, and X then:
+
+transitive: ensures compatibility between X-2 <==> X-1 and X-1 <==> X and X-2 <==> X
+non-transitive: ensures compatibility between X-2 <==> X-1 and X-1 <==> X, but not necessarily X-2 <==> X
+Refer to an example of schema changes which are incrementally compatible, but not transitively so.
+
+The Confluent Schema Registry default compatibility type BACKWARD is non-transitive, which means that it’s not BACKWARD_TRANSITIVE. As a result, new schemas are checked for compatibility only against the latest schema.
+
+These are the compatibility types:
+
+BACKWARD: (default) consumers using the new schema can read data written by producers using the latest registered schema
+BACKWARD_TRANSITIVE: consumers using the new schema can read data written by producers using all previously registered schemas
+FORWARD: consumers using the latest registered schema can read data written by producers using the new schema
+FORWARD_TRANSITIVE: consumers using all previously registered schemas can read data written by producers using the new schema
+FULL: the new schema is forward and backward compatible with the latest registered schema
+FULL_TRANSITIVE: the new schema is forward and backward compatible with all previously registered schemas
+NONE: schema compatibility checks are disabled
+You can change this globally or per subject, but for the remainder of this tutorial, leave the default compatibility type to backward. Refer to Schema Evolution and Compatibility for a more in-depth explanation on the compatibility types.
+
+Failing Compatibility Checks
+Schema Registry checks compatibility as schemas evolve to uphold the producer-consumer contract. Without Schema Registry checking compatibility, your applications could potentially break on schema changes.
+
+In the Payment schema example, let’s say the business now tracks additional information for each payment, for example, a field region that represents the place of sale. Consider the Payment2a schema which includes this extra field region:
+
+$ cat src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment2a.avsc
+{"namespace": "io.confluent.examples.clients.basicavro",
+ "type": "record",
+ "name": "Payment",
+ "fields": [
+     {"name": "id", "type": "string"},
+     {"name": "amount", "type": "double"},
+     {"name": "region", "type": "string"}
+ ]
+}
+Copy
+Before proceeding, think about whether this schema is backward compatible. Specifically, ask yourself whether a consumer can use this new schema to read data written by producers using the older schema without the region field? The answer is no. Consumers will fail reading data with the older schema because the older data does not have the region field, therefore this schema is not backward compatible.
+
+Confluent provides a Schema Registry Maven Plugin, which you can use to check compatibility in development or integrate into your CI/CD pipeline. Our sample pom.xml includes this plugin to enable compatibility checks.
+
+<plugin>
+    <groupId>io.confluent</groupId>
+    <artifactId>kafka-schema-registry-maven-plugin</artifactId>
+    <version>5.0.0</version>
+    <configuration>
+        <schemaRegistryUrls>
+            <param>http://localhost:8081</param>
+        </schemaRegistryUrls>
+        <subjects>
+            <transactions-value>src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment2a.avsc</transactions-value>
+        </subjects>
+    </configuration>
+    <goals>
+        <goal>test-compatibility</goal>
+    </goals>
+</plugin>
+Copy
+It is currently configured to check compatibility of the new Payment2a schema for the transactions-value subject in Schema Registry. Run the compatibility check and verify that it fails:
+
+$ mvn io.confluent:kafka-schema-registry-maven-plugin:5.0.0:test-compatibility
+...
+[ERROR] Schema examples/clients/avro/src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment2a.avsc is not compatible with subject(transactions-value)
+...
+Copy
+You could have also just tried to register the new schema Payment2a manually to Schema Registry, which is a useful way for non-Java clients to check compatibility. As expected, Schema Registry rejects it with an error message that it is incompatible.
+
+$ curl -X POST -H "Content-Type: application/vnd.schemaregistry.v1+json" --data '{"schema": "{\"type\":\"record\",\"name\":\"Payment\",\"namespace\":\"io.confluent.examples.clients.basicavro\",\"fields\":[{\"name\":\"id\",\"type\":\"string\"},{\"name\":\"amount\",\"type\":\"double\"},{\"name\":\"region\",\"type\":\"string\"}]}"}' http://localhost:8081/subjects/transactions-value/versions
+{"error_code":409,"message":"Schema being registered is incompatible with an earlier schema"}
+Copy
+Passing Compatibility Checks
+To maintain backward compatibility, a new schema must assume default values for the new field if it is not provided. Consider an updated Payment2b schema that has a default value for region:
+
+$ cat src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment2b.avsc
+{"namespace": "io.confluent.examples.clients.basicavro",
+ "type": "record",
+ "name": "Payment",
+ "fields": [
+     {"name": "id", "type": "string"},
+     {"name": "amount", "type": "double"},
+     {"name": "region", "type": "string", "default": ""}
+ ]
+}
+Copy
+Update the pom.xml to refer to Payment2b.avsc instead of Payment2a.avsc. Re-run the compatibility check and verify that it passes:
+
+$ mvn io.confluent:kafka-schema-registry-maven-plugin:5.0.0:test-compatibility
+...
+[INFO] Schema examples/clients/avro/src/main/resources/avro/io/confluent/examples/clients/basicavro/Payment2b.avsc is compatible with subject(transactions-value)
+...
+Copy
+You can try registering the new schema Payment2b directly, and it succeeds.
+
+$ curl -X POST -H "Content-Type: application/vnd.schemaregistry.v1+json" --data '{"schema": "{\"type\":\"record\",\"name\":\"Payment\",\"namespace\":\"io.confluent.examples.clients.basicavro\",\"fields\":[{\"name\":\"id\",\"type\":\"string\"},{\"name\":\"amount\",\"type\":\"double\"},{\"name\":\"region\",\"type\":\"string\",\"default\":\"\"}]}"}' http://localhost:8081/subjects/transactions-value/versions
+{"id":2}
+Copy
+View the latest subject for transactions-value in Schema Registry:
+
+$ curl --silent -X GET http://localhost:8081/subjects/transactions-value/versions/latest | jq .
+{
+  "subject": "transactions-value",
+  "version": 2,
+  "id": 2,
+  "schema": "{\"type\":\"record\",\"name\":\"Payment\",\"namespace\":\"io.confluent.examples.clients.basicavro\",\"fields\":[{\"name\":\"id\",\"type\":\"string\"},{\"name\":\"amount\",\"type\":\"double\"},{\"name\":\"region\",\"type\":\"string\",\"default\":\"\"}]}"
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+-------------------------------------------------------
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.kafka.streams.examples.wordcount;
+
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.Produced;
+
+import java.util.Arrays;
+import java.util.Locale;
+import java.util.Properties;
+import java.util.concurrent.CountDownLatch;
+
+/**
+ * Demonstrates, using the high-level KStream DSL, how to implement the WordCount program
+ * that computes a simple word occurrence histogram from an input text.
+ * <p>
+ * In this example, the input stream reads from a topic named "streams-plaintext-input", where the values of messages
+ * represent lines of text; and the histogram output is written to topic "streams-wordcount-output" where each record
+ * is an updated count of a single word.
+ * <p>
+ * Before running this example you must create the input topic and the output topic (e.g. via
+ * {@code bin/kafka-topics.sh --create ...}), and write some data to the input topic (e.g. via
+ * {@code bin/kafka-console-producer.sh}). Otherwise you won't see any data arriving in the output topic.
+ */
+public final class WordCountDemo {
+
+    public static void main(final String[] args) {
+        final Properties props = new Properties();
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-wordcount");
+        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+        props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+
+        // setting offset reset to earliest so that we can re-run the demo code with the same pre-loaded data
+        // Note: To re-run the demo, you need to use the offset reset tool:
+        // https://cwiki.apache.org/confluence/display/KAFKA/Kafka+Streams+Application+Reset+Tool
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final KStream<String, String> source = builder.stream("streams-plaintext-input");
+
+        final KTable<String, Long> counts = source
+            .flatMapValues(value -> Arrays.asList(value.toLowerCase(Locale.getDefault()).split(" ")))
+            .groupBy((key, value) -> value)
+            .count();
+
+        // need to override value serde to Long type
+        counts.toStream().to("streams-wordcount-output", Produced.with(Serdes.String(), Serdes.Long()));
+
+        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
+        final CountDownLatch latch = new CountDownLatch(1);
+
+        // attach shutdown handler to catch control-c
+        Runtime.getRuntime().addShutdownHook(new Thread("streams-wordcount-shutdown-hook") {
+            @Override
+            public void run() {
+                streams.close();
+                latch.countDown();
+            }
+        });
+
+        try {
+            streams.start();
+            latch.await();
+        } catch (final Throwable e) {
+            System.exit(1);
+        }
+        System.exit(0);
+    }
+}
+------------------------------------------------------------------
+
+// Serializers/deserializers (serde) for String and Long types
+final Serde<String> stringSerde = Serdes.String();
+final Serde<Long> longSerde = Serdes.Long();
+
+// Construct a `KStream` from the input topic "streams-plaintext-input", where message values
+// represent lines of text (for the sake of this example, we ignore whatever may be stored
+// in the message keys).
+KStream<String, String> textLines = builder.stream("streams-plaintext-input", Consumed.with(stringSerde, stringSerde));
+
+KTable<String, Long> wordCounts = textLines
+    // Split each text line, by whitespace, into words.  The text lines are the message
+    // values, i.e. we can ignore whatever data is in the message keys and thus invoke
+    // `flatMapValues` instead of the more generic `flatMap`.
+    .flatMapValues(value -> Arrays.asList(value.toLowerCase().split("\\W+")))
+    // We use `groupBy` to ensure the words are available as message keys
+    .groupBy((key, value) -> value)
+    // Count the occurrences of each word (message key).
+    .count();
+
+// Convert the `KTable<String, Long>` into a `KStream<String, Long>` and write to the output topic.
+wordCounts.toStream().to("streams-wordcount-output", Produced.with(stringSerde, longSerde));
+-------------------------------------------------------------------------
+Producer config:
+bootstrap.servers
+key.serializer
+value.serializer
+acks: 0\1\all   in-sync replicas
+buffer.memory:33554432
+compression.type: snappy\LZ4\None\gzip
+retries: 0 it depends upon max.in.flight.requests.per.connection:1
+ssl.key.password
+ssl.keystore.location
+ssl.keystore.password
+ssl.truststore.location
+ssl.truststore.password
+batch.size:16384
+client.id
+connections.max.idle.ms:540000
+linger.ms:0
+max.block.ms: 60000
+max.request.size:1048576
+partitioner.class
+receive.buffer.bytes:32768
+request.timeout.ms
+send.buffer.bytes:131072
+timeout.ms:30000
+interceptor.classes: null
+max.in.flight.requests.per.connection: 5
+metadata.fetch.timeout.ms:60000
+metadata.max.age.ms:30000
+retry.backoff.ms: 100
+------------------------------------
+group.id
+zookeeper.connect
+consumer.id: null generated automatically if not set
+socket.timeout.ms: 30 * 1000
+socket.receive.buffer.bytes:64 * 1024
+fetch.message.max.bytes:1024 * 1024
+num.consumer.fetchers:1
+auto.commit.enable: true
+auto.commit.interval.ms:60 * 1000
+queued.max.message.chunks:2
+offsets.commit.max.retries: 5
+offsets.channel.socket.timeout.ms:10000
+
+dual.commit.enabled:true should be set as false for new version of kafka
+partition.assignment.strategy: range
+
+heartbeat.interval.ms: 3000
+max.partition.fetch.bytes:1048576
+session.timeout.ms
+https://kafka.apache.org/0100/documentation.html#producerapi
+----------------------------------------
+kafka-connect configuration:
+---------------------------
+name=local-file-source
+connector.class=FileStreamSource
+tasks.max=1
+file=test.txt
+topic=connect-test
+transforms=MakeMap, InsertSource
+transforms.MakeMap.type=org.apache.kafka.connect.transforms.HoistField$Value
+transforms.MakeMap.field=line
+transforms.InsertSource.type=org.apache.kafka.connect.transforms.InsertField$Value
+transforms.InsertSource.static.field=data_source
+transforms.InsertSource.static.value=test-file-source
+-------------------------------
+InsertField - Add a field using either static data or record metadata
+
+ReplaceField - Filter or rename fields
+
+MaskField - Replace field with valid null value for the type (0, empty string, etc) 
+
+ValueToKey
+
+HoistField - Wrap the entire event as a single field inside a Struct or a Map
+
+ExtractField - Extract a specific field from Struct and Map and include only this field in results
+
+SetSchemaMetadata - modify the schema name or version
+
+TimestampRouter - Modify the topic of a record based on original topic and timestamp. Useful when using a sink that needs to write to different tables or indexes based on timestamps
+
+RegexRouter - modify the topic of a record based on original topic, replacement string and a regular expression
+-----------------
+Kafka-tools:
+
+kafka-preferred-replica-election.sh : 
+
+With replication, each partition can have multiple replicas. The list of replicas for a partition is called the "assigned replicas". The first replica in this list is the "preferred replica".
+This tool helps to restore the leadership balance between the brokers in the cluster.
+
+kafka-preferred-replica-election.sh --zookeeper localhost:12913/kafka --path-to-json-file topicPartitionList.json
+
+
+this json can be empty or something like below
+{
+ "partitions":
+  [
+    {"topic": "topic1", "partition": 0},
+    {"topic": "topic1", "partition": 1},
+    {"topic": "topic1", "partition": 2},
+    {"topic": "topic2", "partition": 0},
+    {"topic": "topic2", "partition": 1}
+  ]
+}
+
+StateChangeLogMerger Tool:The goal of this tool is to collect data from the brokers in a cluster and format it in a central log to help troubleshoot issues with state changes. Every broker in a Kafka cluster emits a state-change.log that logs the lifecycle of every state change received by the broker. Often times, there is some problem with leader election for a subset of topics/partitions and the question is what caused the problem. In order to answer this question, we need a global view of state changes in the kafka cluster, possibly filtered on a time range and/or specific topics/partitions. This is exactly what the StateChangeLogMerger tool does. It takes in a list of state-change.log files, merges them in time order, filters on a certain time range if specified by the user, filters on topics/partitions if specified by the user, and outputs a merged and formatted state-change.log that is easy to query and understand the root cause.
+------------------------------
+Querying local key-value stores:To query a local key-value store, you must first create a topology with a key-value store. This example creates a key-value store named “CountsKeyValueStore”. This store will hold the latest count for any word that is found on the topic “word-count-input”
+
+StreamsBuilder builder = ...;
+KStream<String, String> textLines = ...;
+
+// Define the processing topology (here: WordCount)
+KGroupedStream<String, String> groupedByWord = textLines
+  .flatMapValues(value -> Arrays.asList(value.toLowerCase().split("\\W+")))
+  .groupBy((key, word) -> word, Serialized.with(stringSerde, stringSerde));
+
+// Create a key-value store named "CountsKeyValueStore" for the all-time word counts
+groupedByWord.count(Materialized.<String, String, KeyValueStore<Bytes, byte[]>as("CountsKeyValueStore"));
+
+// Start an instance of the topology
+KafkaStreams streams = new KafkaStreams(builder, props);
+streams.start()
+
+After the application has started, you can get access to “CountsKeyValueStore” and then query it via the ReadOnlyKeyValueStore API:
+
+// Get the key-value store CountsKeyValueStore
+ReadOnlyKeyValueStore<String, Long> keyValueStore =
+    streams.store("CountsKeyValueStore", QueryableStoreTypes.keyValueStore());
+
+// Get value by key
+System.out.println("count for hello:" + keyValueStore.get("hello"));
+
+// Get the values for a range of keys available in this application instance
+KeyValueIterator<String, Long> range = keyValueStore.range("all", "streams");
+while (range.hasNext()) {
+  KeyValue<String, Long> next = range.next();
+  System.out.println("count for " + next.key + ": " + value);
+}
+
+// Get the values for all of the keys available in this application instance
+KeyValueIterator<String, Long> range = keyValueStore.all();
+while (range.hasNext()) {
+  KeyValue<String, Long> next = range.next();
+  System.out.println("count for " + next.key + ": " + value);
+}
+
+You can also materialize the results of stateless operators by using the overloaded methods that take a queryableStoreName as shown in the example below:
+
+StreamsBuilder builder = ...;
+KTable<String, Integer> regionCounts = ...;
+
+// materialize the result of filtering corresponding to odd numbers
+// the "queryableStoreName" can be subsequently queried.
+KTable<String, Integer> oddCounts = numberLines.filter((region, count) -> (count % 2 != 0),
+  Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>as("queryableStoreName"));
+
+// do not materialize the result of filtering corresponding to even numbers
+// this means that these results will not be materialized and cannot be queried.
+KTable<String, Integer> oddCounts = numberLines.filter((region, count) -> (count % 2 == 0));
+------------------------
+Querying local window stores
+
+A window store will potentially have many results for any given key because the key can be present in multiple windows. However, there is only one result per window for a given key.
+
+To query a local window store, you must first create a topology with a window store. This example creates a window store named “CountsWindowStore” that contains the counts for words in 1-minute windows.
+
+StreamsBuilder builder = ...;
+KStream<String, String> textLines = ...;
+
+// Define the processing topology (here: WordCount)
+KGroupedStream<String, String> groupedByWord = textLines
+  .flatMapValues(value -> Arrays.asList(value.toLowerCase().split("\\W+")))
+  .groupBy((key, word) -> word, Serialized.with(stringSerde, stringSerde));
+
+// Create a window state store named "CountsWindowStore" that contains the word counts for every minute
+groupedByWord.windowedBy(TimeWindows.of(60000))
+  .count(Materialized.<String, Long, WindowStore<Bytes, byte[]>as("CountsWindowStore"));
+
+After the application has started, you can get access to “CountsWindowStore” and then query it via the ReadOnlyWindowStore API:
+
+// Get the window store named "CountsWindowStore"
+ReadOnlyWindowStore<String, Long> windowStore =
+    streams.store("CountsWindowStore", QueryableStoreTypes.windowStore());
+
+// Fetch values for the key "world" for all of the windows available in this application instance.
+// To get *all* available windows we fetch windows from the beginning of time until now.
+long timeFrom = 0; // beginning of time = oldest available
+long timeTo = System.currentTimeMillis(); // now (in processing-time)
+WindowStoreIterator<Long> iterator = windowStore.fetch("world", timeFrom, timeTo);
+while (iterator.hasNext()) {
+  KeyValue<Long, Long> next = iterator.next();
+  long windowTimestamp = next.key;
+  System.out.println("Count of 'world' @ time " + windowTimestamp + " is " + next.value);
+}
+---------------------
+Querying local custom state stores
+Note:Only the Processor API supports custom state stores.
+
+Before querying the custom state stores you must implement these interfaces:
+
+Your custom state store must implement StateStore.
+You must have an interface to represent the operations available on the store.
+You must provide an implementation of StoreBuilder for creating instances of your store.
+It is recommended that you provide an interface that restricts access to read-only operations. This prevents users of this API from mutating the state of your running Kafka Streams application out-of-band.
+The class/interface hierarchy for your custom store might look something like:  
+
+  // implementation of the actual store
+}
+
+// Read-write interface for MyCustomStore
+public interface MyWriteableCustomStore<K,V> extends MyReadableCustomStore<K,V> {
+  void write(K Key, V value);
+}
+
+// Read-only interface for MyCustomStore
+public interface MyReadableCustomStore<K,V> {
+  V read(K key);
+}
+
+public class MyCustomStoreBuilder implements StoreBuilder {
+  // implementation of the supplier for MyCustomStore
+}
+
+To make this store queryable you must:
+
+Provide an implementation of QueryableStoreType.
+Provide a wrapper class that has access to all of the underlying instances of the store and is used for querying.
+Here is how to implement QueryableStoreType:
+
+
+public class MyCustomStoreType<K,V> implements QueryableStoreType<MyReadableCustomStore<K,V>> {
+
+  // Only accept StateStores that are of type MyCustomStore
+  public boolean accepts(final StateStore stateStore) {
+    return stateStore instanceOf MyCustomStore;
+  }
+
+  public MyReadableCustomStore<K,V> create(final StateStoreProvider storeProvider, final String storeName) {
+      return new MyCustomStoreTypeWrapper(storeProvider, storeName, this);
+  }
+
+}
+
+A wrapper class is required because each instance of a Kafka Streams application may run multiple stream tasks and manage multiple local instances of a particular state store. The wrapper class hides this complexity and lets you query a “logical” state store by name without having to know about all of the underlying local instances of that state store.
+
+When implementing your wrapper class you must use the StateStoreProvider interface to get access to the underlying instances of your store. StateStoreProvider#stores(String storeName, QueryableStoreType<T> queryableStoreType) returns a List of state stores with the given storeName and of the type as defined by queryableStoreType.
+
+// We strongly recommended implementing a read-only interface
+// to restrict usage of the store to safe read operations!
+public class MyCustomStoreTypeWrapper<K,V> implements MyReadableCustomStore<K,V> {
+
+  private final QueryableStoreType<MyReadableCustomStore<K, V>> customStoreType;
+  private final String storeName;
+  private final StateStoreProvider provider;
+
+  public CustomStoreTypeWrapper(final StateStoreProvider provider,
+                                final String storeName,
+                                final QueryableStoreType<MyReadableCustomStore<K, V>> customStoreType) {
+
+    // ... assign fields ...
+  }
+
+  // Implement a safe read method
+  @Override
+  public V read(final K key) {
+    // Get all the stores with storeName and of customStoreType
+    final List<MyReadableCustomStore<K, V>> stores = provider.getStores(storeName, customStoreType);
+    // Try and find the value for the given key
+    final Optional<V> value = stores.stream().filter(store -> store.read(key) != null).findFirst();
+    // Return the value if it exists
+    return value.orElse(null);
+  }
+
+}
+
+You can now find and query your custom store:
+
+Topology topology = ...;
+ProcessorSupplier processorSuppler = ...;
+
+// Create CustomStoreSupplier for store name the-custom-store
+MyCustomStoreBuilder customStoreBuilder = new MyCustomStoreBuilder("the-custom-store") //...;
+// Add the source topic
+topology.addSource("input", "inputTopic");
+// Add a custom processor that reads from the source topic
+topology.addProcessor("the-processor", processorSupplier, "input");
+// Connect your custom state store to the custom processor above
+topology.addStateStore(customStoreBuilder, "the-processor");
+
+KafkaStreams streams = new KafkaStreams(topology, config);
+streams.start();
+
+// Get access to the custom store
+MyReadableCustomStore<String,String> store = streams.store("the-custom-store", new MyCustomStoreType<String,String>());
+// Query the store
+String value = store.read("key");
+------------------------------------------
+QUERYING REMOTE STATE STORES FOR THE ENTIRE APP:
+
+To query remote states for the entire app, you must expose the application’s full state to other applications, including applications that are running on different machines.
+
+For example, you have a Kafka Streams application that processes user events in a multi-player video game, and you want to retrieve the latest status of each user directly and display it in a mobile app. Here are the required steps to make the full state of your application queryable:
+
+Add an RPC layer to your application so that the instances of your application can be interacted with via the network (e.g., a REST API, Thrift, a custom protocol, and so on). The instances must respond to interactive queries. You can follow the reference examples provided to get started.
+Expose the RPC endpoints of your application’s instances via the application.server configuration setting of Kafka Streams. Because RPC endpoints must be unique within a network, each instance has its own value for this configuration setting. This makes an application instance discoverable by other instances.
+In the RPC layer, discover remote application instances and their state stores and query locally available state stores to make the full state of your application queryable. The remote application instances can forward queries to other app instances if a particular instance lacks the local data to respond to a query. The locally available state stores can directly respond to queries.
+
+Discover any running instances of the same application as well as the respective RPC endpoints they expose for interactive queries
+
+Adding an RPC layer to your application
+There are many ways to add an RPC layer. The only requirements are that the RPC layer is embedded within the Kafka Streams application and that it exposes an endpoint that other application instances and applications can connect to.
+
+Exposing the RPC endpoints of your application
+To enable remote state store discovery in a distributed Kafka Streams application, you must set the configuration property in the config properties. The application.server property defines a unique host:port pair that points to the RPC endpoint of the respective instance of a Kafka Streams application. The value of this configuration property will vary across the instances of your application. When this property is set, Kafka Streams will keep track of the RPC endpoint information for every instance of an application, its state stores, and assigned stream partitions through instances of StreamsMetadata.
+
+Tip
+
+Consider leveraging the exposed RPC endpoints of your application for further functionality, such as piggybacking additional inter-application communication that goes beyond interactive queries.
+
+This example shows how to configure and run a Kafka Streams application that supports the discovery of its state stores.
+
+Properties props = new Properties();
+// Set the unique RPC endpoint of this application instance through which it
+// can be interactively queried.  In a real application, the value would most
+// probably not be hardcoded but derived dynamically.
+String rpcEndpoint = "host1:4460";
+props.put(StreamsConfig.APPLICATION_SERVER_CONFIG, rpcEndpoint);
+// ... further settings may follow here ...
+
+StreamsBuilder builder = new StreamsBuilder();
+
+KStream<String, String> textLines = builder.stream(stringSerde, stringSerde, "word-count-input");
+
+final KGroupedStream<String, String> groupedByWord = textLines
+    .flatMapValues(value -> Arrays.asList(value.toLowerCase().split("\\W+")))
+    .groupBy((key, word) -> word, Serialized.with(stringSerde, stringSerde));
+
+// This call to `count()` creates a state store named "word-count".
+// The state store is discoverable and can be queried interactively.
+groupedByWord.count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>as("word-count"));
+
+// Start an instance of the topology
+KafkaStreams streams = new KafkaStreams(builder, props);
+streams.start();
+
+// Then, create and start the actual RPC service for remote access to this
+// application instance's local state stores.
+//
+// This service should be started on the same host and port as defined above by
+// the property `StreamsConfig.APPLICATION_SERVER_CONFIG`.  The example below is
+// fictitious, but we provide end-to-end demo applications (such as KafkaMusicExample)
+// that showcase how to implement such a service to get you started.
+MyRPCService rpcService = ...;
+rpcService.listenAt(rpcEndpoint);
+Discovering and accessing application instances and their local state stores
+The following methods return StreamsMetadata objects, which provide meta-information about application instances such as their RPC endpoint and locally available state stores.
+
+KafkaStreams#allMetadata(): find all instances of this application
+KafkaStreams#allMetadataForStore(String storeName): find those applications instances that manage local instances of the state store “storeName”
+KafkaStreams#metadataForKey(String storeName, K key, Serializer<K> keySerializer): using the default stream partitioning strategy, find the one application instance that holds the data for the given key in the given state store
+KafkaStreams#metadataForKey(String storeName, K key, StreamPartitioner<K, ?> partitioner): using partitioner, find the one application instance that holds the data for the given key in the given state store
+Attention
+
+If application.server is not configured for an application instance, then the above methods will not find any StreamsMetadata for it.
+
+For example, we can now find the StreamsMetadata for the state store named “word-count” that we defined in the code example shown in the previous section:
+
+KafkaStreams streams = ...;
+// Find all the locations of local instances of the state store named "word-count"
+Collection<StreamsMetadata> wordCountHosts = streams.allMetadataForStore("word-count");
+
+// For illustrative purposes, we assume using an HTTP client to talk to remote app instances.
+HttpClient http = ...;
+
+// Get the word count for word (aka key) 'alice': Approach 1
+//
+// We first find the one app instance that manages the count for 'alice' in its local state stores.
+StreamsMetadata metadata = streams.metadataForKey("word-count", "alice", Serdes.String().serializer());
+// Then, we query only that single app instance for the latest count of 'alice'.
+// Note: The RPC URL shown below is fictitious and only serves to illustrate the idea.  Ultimately,
+// the URL (or, in general, the method of communication) will depend on the RPC layer you opted to
+// implement.  Again, we provide end-to-end demo applications (such as KafkaMusicExample) that showcase
+// how to implement such an RPC layer.
+Long result = http.getLong("http://" + metadata.host() + ":" + metadata.port() + "/word-count/alice");
+
+// Get the word count for word (aka key) 'alice': Approach 2
+//
+// Alternatively, we could also choose (say) a brute-force approach where we query every app instance
+// until we find the one that happens to know about 'alice'.
+Optional<Long> result = streams.allMetadataForStore("word-count")
+    .stream()
+    .map(streamsMetadata -> {
+        // Construct the (fictituous) full endpoint URL to query the current remote application instance
+        String url = "http://" + streamsMetadata.host() + ":" + streamsMetadata.port() + "/word-count/alice";
+        // Read and return the count for 'alice', if any.
+        return http.getLong(url);
+    })
+    .filter(s -> s != null)
+    .findFirst();
+At this point the full state of the application is interactively queryable:
+
+You can discover the running instances of the application and the state stores they manage locally.
+Through the RPC layer that was added to the application, you can communicate with these application instances over the network and query them for locally available state.
+The application instances are able to serve such queries because they can directly query their own local state stores and respond via the RPC layer.
+Collectively, this allows us to query the full state of the entire application.
+To see an end-to-end application with interactive queries, review the demo applications.
+--------------------

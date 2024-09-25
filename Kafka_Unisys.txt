@@ -1,0 +1,505 @@
+sudo yum install java-1.8.0-amazon-corretto-devel
+sudo alternatives --config java
+
+OR
+sudo yum install java-11-amazon-corretto-devel
+-------------------------------
+Reading materials can be donwloaded from below google drive link
+
+https://drive.google.com/drive/folders/1DWZA1b3nEwz7pSW0WrBL24SAOl8fO93U?usp=sharing
+
+-----------------
+1. First we need to install JAVA:
+sudo yum install java-1.8.0-openjdk-devel
+sudo alternatives --config java
+
+To download the Apache Kafka :
+
+sudo wget https://archive.apache.org/dist/kafka/2.8.1/kafka_2.12-2.8.1.tgz
+
+sudo wget https://downloads.apache.org/kafka/3.6.0/kafka_2.12-3.6.0.tgz
+
+sudo tar -xvf kafka_2.12-2.8.1.tgz
+
+sudo mkdir -p /tmp/zookeeper1
+sudo mkdir -p /tmp/zookeeper2
+sudo mkdir -p /tmp/zookeeper3
+sudo chmod 777 -R /tmp/zookeeper1
+sudo chmod 777 -R /tmp/zookeeper2
+sudo chmod 777 -R /tmp/zookeeper3
+
+
+cd /home/ec2-user/kafka_2.12-2.8.1/config
+
+sudo vi zookeeper.properties
+
+dataDir=/tmp/zookeeper1
+clientPort=2181
+admin.enableServer=true
+admin.serverPort=8080
+tickTime=2000
+initLimit=5
+syncLimit=2
+server.1=172.31.8.162:2888:3888
+server.2=172.31.8.162:2989:3088
+server.3=172.31.8.162:3089:3188
+autopurge.snapRetainCount=3
+autopurge.purgeInterval=24
+------------------
+
+sudo cp zookeeper.properties zookeeper1.properties
+sudo cp zookeeper.properties zookeeper2.properties
+-----------------------------
+sudo vi zookeeper1.properties
+dataDir=/tmp/zookeeper2
+clientPort=2182
+#admin.enableServer=true
+#admin.serverPort=8080
+-----------------
+sudo vi zookeeper2.properties
+dataDir=/tmp/zookeeper3
+clientPort=2183
+#admin.enableServer=true
+#admin.serverPort=8080
+------------------------------
+sudo vi /tmp/zookeeper1/myid
+1
+-------------------
+sudo vi /tmp/zookeeper2/myid
+2
+------------
+sudo vi /tmp/zookeeper3/myid
+3
+-------------------------------
+cd /home/ec2-user/kafka_2.12-2.8.1/bin
+
+Let's start the zookeeper:
+sudo chmod 777 -R /home/ec2-user/kafka_2.12-2.8.1
+
+
+sudo nohup ./zookeeper-server-start.sh ../config/zookeeper.properties &
+
+sudo nohup ./zookeeper-server-start.sh ../config/zookeeper1.properties &
+
+sudo nohup ./zookeeper-server-start.sh ../config/zookeeper2.properties &
+
+-------------------------------- 
+sudo yum install nc
+echo srvr |nc 172.31.8.162 2181 | grep Mode
+echo srvr |nc 172.31.8.162 2182 | grep Mode
+----------------
+to access Zookeeper Admin web page:
+http://3.109.123.114:8080/commands
+---------
+Let's create Kafka cluster
+
+sudo mkdir -p /tmp/kafka1
+sudo mkdir -p /tmp/kafka2
+sudo mkdir -p /tmp/kafka3
+sudo mkdir -p /tmp/kafka4
+
+sudo chmod -R 777 /tmp/kafka1
+sudo chmod -R 777 /tmp/kafka2
+sudo chmod -R 777 /tmp/kafka3
+sudo chmod -R 777 /tmp/kafka4
+
+cd /home/ec2-user/kafka_2.12-2.8.1/config
+
+sudo vi server.properties
+broker.id=10
+listeners=PLAINTEXT://172.31.8.162:9092
+log.dirs=/tmp/kafka1
+num.partitions=4
+offsets.topic.replication.factor=2
+transaction.state.log.replication.factor=2
+transaction.state.log.min.isr=2
+log.flush.interval.messages=10000
+log.flush.interval.ms=1000
+log.retention.hours=168
+log.segment.bytes=1073741824
+zookeeper.connect=172.31.8.162:2181,172.31.8.162:2182,172.31.8.162:2183
+group.initial.rebalance.delay.ms=5000
+auto.leader.rebalance.enable=true
+compression.type=lz4
+delete.topic.enable=true
+message.max.bytes=1048588
+min.insync.replicas=2
+default.replication.factor=3
+broker.rack=RC1
+---------------------
+sudo cp server.properties server1.properties
+sudo cp server.properties server2.properties
+sudo cp server.properties server3.properties
+
+------------------------
+sudo vi server1.properties
+broker.id=20
+listeners=PLAINTEXT://172.31.8.162:9093
+log.dirs=/tmp/kafka2
+broker.rack=RC1
+--------------------------------------------
+sudo vi server2.properties
+broker.id=30
+listeners=PLAINTEXT://172.31.8.162:9094
+log.dirs=/tmp/kafka3
+broker.rack=RC2
+---------------------------------
+sudo vi server3.properties
+broker.id=40
+listeners=PLAINTEXT://172.31.8.162:9095
+log.dirs=/tmp/kafka4
+broker.rack=RC2
+----------------------------
+To run Kakfa brroker
+
+cd /home/ec2-user/kafka_2.12-2.8.1/bin
+
+sudo nohup ./kafka-server-start.sh ../config/server.properties &
+
+sudo nohup ./kafka-server-start.sh ../config/server1.properties &
+
+
+sudo nohup ./kafka-server-start.sh ../config/server2.properties &
+
+sudo nohup ./kafka-server-start.sh ../config/server3.properties &
+
+ps -ef|grep kafka
+
+sudo ./zookeeper-shell.sh 172.31.8.162:2181 ls /brokers/ids
+sudo ./zookeeper-shell.sh 172.31.8.162:2181 get /controller
+
+./kafka-topics.sh --create --topic demo1 --bootstrap-server 172.31.8.162:9094
+./kafka-topics.sh --describe --topic demo1 --bootstrap-server 172.31.8.162:9094
+
+
+./kafka-topics.sh --create --topic demo2 --partitions 2 --replication-factor 4 --bootstrap-server 172.31.8.162:9094,172.31.8.162:9093
+
+// To kill the process first find out process id 
+
+ps -ef| grep kafka 
+
+sudo kill -9 9877 9866 9844 9822 
+
+./kafka-console-producer.sh --topic demo6 --bootstrap-server 172.31.8.162:9092
+
+/kafka-console-consumer.sh --topic demo6 --from-beginning --bootstrap-server 172.31.8.162:9092
+
+./kafka-console-consumer.sh --topic demo6 --partition 0  --offset 0 --bootstrap-server 172.31.8.162:9092
+
+./kafka-console-consumer.sh --topic demo6 --from-beginning --bootstrap-server 172.31.8.162:9092 --property print.key=true --property print.timestamp=true --property print.offset=true --property print.partition=true
+
+----------------------------------------------------
+ sudo ./kafka-configs.sh --bootstrap-server 172.31.8.162:9092 --entity-type topics --entity-name demo1 --alter --add-config min.insync.replicas=1
+---------------------------------------------------------
+
+1. First we need mention all the configuration attributes in the below file:
+
+cd /home/ec2-user/kafka_2.12-2.8.1/bin
+
+sudo vi ../config/connect-file-source.properties
+
+name=local-file-source-mukesh
+connector.class=FileStreamSource
+tasks.max=2
+errors.tolerance=all
+errors.retry.delay.max.ms=60000
+errors.retry.timeout=5000
+file=/home/ec2-user/test.txt
+topic=connect-test
+transforms=MakeMap,InsertSource
+transforms.MakeMap.type=org.apache.kafka.connect.transforms.HoistField$Value
+transforms.MakeMap.field=record
+transforms.InsertSource.type=org.apache.kafka.connect.transforms.InsertField$Value
+transforms.InsertSource.static.field=company_name
+transforms.InsertSource.static.value=Unisys
+-------------------------------------------
+sudo vi ../config/connect-standalone.properties
+
+bootstrap.servers=172.31.8.162:9092,172.31.8.162:9093
+key.converter.schemas.enable=false
+value.converter.schemas.enable=false
+offset.storage.file.filename=/home/ec2-user/connect.offsets
+----------------------------------------------
+Start the kafka-connect:
+cd /home/ec2-user/kafka_2.12-2.8.1/bin
+sudo ./connect-standalone.sh ../config/connect-standalone.properties ../config/connect-file-source.properties
+
+---------------------------------
+echo "message1">> /home/ec2-user/test.txt
+echo "message2">> /home/ec2-user/test.txt
+echo "message3">> /home/ec2-user/test.txt
+-------------------------------------------------------
+let's check the topic
+
+sudo ./kafka-topics.sh --list --bootstrap-server IP:9092
+
+sudo ./kafka-console-consumer.sh --topic connect-test --partition 0 --offset 0 --bootstrap-server 172.31.12.185:9092
+
+-------------------------------------------------------
+Now we will run Kafka-connect and import the data from Kakfa into file:
+cd /home/ec2-user/kafka_2.12-2.8.1/config
+sudo vi connect-file-sink.properties
+name=local-file-sink
+connector.class=FileStreamSink
+tasks.max=2
+file=/home/ec2-user/test.sink.txt
+topics=connect-test
+------------------------------------------
+
+sudo ./connect-standalone.sh ../config/connect-standalone.properties ../config/connect-file-sink.properties
+----------------------------------------
+
+1. generate keystore file for each broker:
+
+sudo keytool -keystore broker10.keystore.jks -alias broker10 -validity 30 -genkey
+
+2. Setup the CA authroity:
+
+it will generate the certificate of CA : it will give 2 files ca-cert and ca-key
+
+sudo openssl req -new -x509 -keyout ca-key -out ca-cert -days 30
+
+3. Let's import CA certificate "ca-cert" into keystore file of broker10 "broker10.keystore.jks"
+
+sudo keytool -keystore broker10.keystore.jks -alias CARoot -import -file ca-cert
+
+4. Get the public certificate of keystore imported into un-signed file "cert-file-broker10"
+
+sudo keytool -keystore broker10.keystore.jks -alias broker10 -certreq -file cert-file-broker10
+
+5. Get this un-signed file "cert-file-broker10" signed by the CA and provide file "cert-signed-broker10"
+
+sudo openssl x509 -req -CA ca-cert -CAkey ca-key -in cert-file-broker10 -out cert-signed-broker10 -days 30 -CAcreateserial -passin pass:test123
+
+6. Import the CA's cert file into truststore  
+sudo keytool -keystore broker10.truststore.jks -alias CARoot -import -file ca-cert 
+
+7. Import signed file "cert-signed-broker10" and ca-cert file into keystore file "broker10.keystore.jks"
+
+sudo keytool -keystore broker10.keystore.jks -alias CARoot -import -file ca-cert
+
+sudo keytool -keystore broker10.keystore.jks -alias broker10 -import -file cert-signed-broker10
+
+-----------------------------
+
+sudo vi server.properties 
+
+listeners=SSL://172.31.8.162:9092
+security.inter.broker.protocol = SSL
+ssl.keystore.location=/home/ec2-user/broker10.keystore.jks
+ssl.keystore.password=test123
+ssl.key.password=test123
+ssl.truststore.location=/home/ec2-user/broker10.truststore.jks
+ssl.truststore.password=test123
+ssl.endpoint.identification.algorithm=
+ssl.client.auth=required
+----------------------------------
+then restart the broker :
+-----------------------
+community verstion : it will not have control center
+curl -O http://packages.confluent.io/archive/5.1/confluent-community-5.1.1-2.11.tar.gz
+
+Another approach: 
+A. ELK stack
+    Logstash(capture kakfa metrics)>> ElasticSearch >> Kibana(monitor and alert(paid))
+
+B.  kafka metrics catcher(jar file) >> promethous >> Grafana 
+   
+
+Confluent :
+sudo curl -O http://packages.confluent.io/archive/5.1/confluent-5.1.0-2.11.tar.gz
+
+sudo tar -xvf confluent-5.1.0-2.11.tar.gz
+
+cd /home/ec2-user/confluent-5.1.0/bin
+
+sudo ./confluent start
+ 
+sudo ./confluent status
+  
+sudo nohup ./control-center-start ../etc/confluent-control-center/control-center.properties &
+
+------------------------------------------------------
+
+
+in the bin folder of confulent :
+
+A. first stop the confulent
+sudo ./confluent stop
+
+B.  Intergrate kafka-connect-datagen:0.1.0 with kafka-connect
+sudo ./confluent-hub install --no-prompt confluentinc/kafka-connect-datagen:0.1.0
+
+C. Start the confluent
+sudo ./confluent start
+
+D. create 2 topics "users" and "pageviews"
+sudo ./kafka-topics --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic users
+
+sudo ./kafka-topics --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic pageviews
+
+E. download the Json file containing configuration for running Java applicationt to publish data into pageview topic
+
+sudo wget https://github.com/confluentinc/kafka-connect-datagen/raw/master/config/connector_pageviews_cos.config
+
+F. Now run kafka-connect using REST API so that it can run java application publising data into pageviews topic in AVRO format
+
+sudo curl -X POST -H "Content-Type: application/json" --data @connector_pageviews_cos.config http://localhost:8083/connectors
+
+G. let's download another json file to write into "users" topic
+sudo wget https://github.com/confluentinc/kafka-connect-datagen/raw/master/config/connector_users_cos.config
+
+H. Start the kakfa-connect to publish into "users" topic
+sudo curl -X POST -H "Content-Type: application/json" --data @connector_users_cos.config http://localhost:8083/connectors
+
+let's read and see whether data is written:
+sudo ./kafka-avro-console-consumer --topic pageviews --from-beginning --bootstrap-server localhost:9092
+
+I. 
+To verify Schema registry :
+
+sudo curl -X GET http://localhost:8081/subjects
+
+sudo curl -X GET http://localhost:8081/subjects/pageviews-value/versions/1
+sudo curl -X GET http://localhost:8081/schemas/ids/61
+
+J. We shall start the KSQL prompt 
+
+sudo ./ksql 
+
+CREATE STREAM pageviews (viewtime BIGINT, userid VARCHAR, pageid VARCHAR) \
+WITH (KAFKA_TOPIC='pageviews', VALUE_FORMAT='AVRO');
+
+show streams;
+describe PAGEVIEWS;
+select * from PAGEVIEWS limit 10;
+
+
+CREATE TABLE users (registertime BIGINT, gender VARCHAR, regionid VARCHAR,    \
+>userid VARCHAR, interests array<VARCHAR>, contact_info map<VARCHAR, VARCHAR>) \
+>WITH (KAFKA_TOPIC='users', VALUE_FORMAT='AVRO', KEY = 'userid');
+
+SET 'auto.offset.reset'='earliest';
+
+CREATE STREAM pageviews_female AS SELECT users.userid AS userid, pageid, \
+regionid, gender FROM pageviews LEFT JOIN users ON pageviews.userid = users.userid \
+WHERE gender = 'FEMALE';
+
+CREATE STREAM pageviews_female_like_89 WITH (kafka_topic='pageviews_enriched_r8_r9', \
+value_format='AVRO') AS SELECT * FROM pageviews_female WHERE regionid LIKE '%_8' OR regionid LIKE '%_9';
+
+select * from PAGEVIEWS  where USERID='User_8' limit 100;
+-----------------------------------------------
+
+curl -X POST -H "Content-Type: application/vnd.schemaregistry.v1+json" \
+  --data '{ "schema": "{ \"type\": \"record\", \"name\": \"Person\", \"namespace\": \"com.ippontech.kafkatutorials\", \"fields\": [ { \"name\": \"firstName\", \"type\": \"string\" }, { \"name\": \"lastName\", \"type\": \"string\" }, { \"name\": \"birthDate\", \"type\": \"long\" } ]}" }' \
+  http://localhost:8081/subjects/persons-avro-value/versions
+
+sudo curl -X GET http://localhost:8081/schemas/ids/67
+-----------------------------------
+MongoDB Installation:
+
+sudo wget http://fastdl.mongodb.org/linux/mongodb-linux-x86_64-rhel62-4.0.0.tgz
+
+sudo tar -xvf mongodb-linux-x86_64-rhel62-4.0.0.tgz
+
+sudo mkdir -p /home/ec2-user/MongoDB/data
+ 
+sudo mkdir -p /home/ec2-user/MongoDB/log
+
+sudo chmod 777 -R /home/ec2-user/MongoDB/data
+
+sudo chmod 777 -R /home/ec2-user/MongoDB/log
+
+cd mongodb-linux-x86_64-rhel62-4.0.0/bin/
+
+sudo ./mongod --dbpath /home/ec2-user/MongoDB/data
+
+sudo ./mongo
+
+use test;
+db.employees.insert({"name" : "Mukesh"})
+show tables;
+db.employees.find()
+
+
+
+sudo ./confluent-hub install mongodb/kafka-connect-mongodb:1.0.0
+
+
+sudo vi ../etc/kafka/connect-standalone.properties
+bootstrap.servers=localhost:9092
+key.converter=org.apache.kafka.connect.json.JsonConverter
+value.converter=org.apache.kafka.connect.json.JsonConverter
+key.converter.schemas.enable=false
+value.converter.schemas.enable=false
+
+
+
+cd /home/ec2-user/confluent-5.1.0/etc/kafka
+sudo vi mongo1.properties
+name=mongo-sink
+topics=demo3
+connector.class=com.mongodb.kafka.connect.MongoSinkConnector
+tasks.max=1
+key.ignore=true
+connection.uri=mongodb://localhost:27017
+database=test
+collection=transaction
+max.num.retries=3
+retries.defer.timeout=5000
+type.name=kafka-connect
+schemas.enable=false
+schemas.enable=false
+
+----------------------
+sudo ./kafka-topics --create --topic demo3 --partitions 2 --replication-factor 1 --zookeeper localhost:2181
+
+sudo ./kafka-console-producer --topic demo3 --broker-list localhost:9092
+{"name": "mukesh"}
+{"name": "Vijay"}
+
+-------------------------------------------------
+sudo netstat -ltnp | grep -w ':8083'
+
+sudo ./connect-standalone ../etc/kafka/connect-standalone.properties ../etc/kafka/mongo1.properties
+----------------------------------------------------
+sudo ./confluent-hub install confluentinc/kafka-connect-jdbc:latest
+
+sudo vi ..\etc\kafka\jdbc.properties
+
+name=test-source-mysql-jdbc-autoincrement
+connector.class=io.confluent.connect.jdbc.JdbcSourceConnector
+tasks.max=1
+connection.url=jdbc:mysql://127.0.0.1:3306/studentsDB?user=arjun&password=password
+mode=incrementing
+incrementing.column.name=rollno
+topic.prefix=test-mysql-jdbc-
+----------------------------------
+
+ALTER TABLE <table_name> MODIFY COLUMN <column_name> INT auto_increment
+ALTER TABLE <table_name> ADD PRIMARY KEY (<column_name>)
+-------------------------
+
+
+sudo ./connect-standalone ../etc/kafka/connect-standalone.properties ../etc/kafka/jdbc.properties
+---------------------------------------------
+
+Log compaction topic:
+
+kafka-topics.bat --create --topic demo12 --partitions 2 --replication-factor 1 --bootstrap-server localhost:9092 --config cleanup.policy=compact --config max.compaction.lag.ms=1000
+
+Enforcing Client Quotas:It is also possible to set custom quotas for each client:
+./kafka-configs  --zookeeper localhost:2181 --alter --add-config 'producer_byte_rate=1024,consumer_byte_rate=2048' --entity-name clientA --entity-type clients
+
+Limiting Bandwidth Usage during Data Migration:
+./kafka-reassign-partitions --zookeeper myhost:2181--execute
+--reassignment-json-file bigger-cluster.json —throttle 5000000
+
+
+To view the throttle limit configuration::
+
+bin/kafka-configs --describe --zookeeper localhost:2181 --entity-type brokers
+Configs for brokers '2' are leader.replication.throttled.rate=1000000,follower.replication.throttled.rate=1000000
+Configs for brokers '1' are leader.replication.throttled.rate=1000000,follower.replication.throttled.rate=1000000
+

@@ -1,0 +1,729 @@
+kafka-consumer-groups --bootstrap-server BROKER_ADDRESS --describe --group CONSUMER_GROUP --new-consumer
+
+kafka-consumer-groups.sh --bootstrap-server localhost:9092 --list
+
+/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --reset-offsets --group consumergroup1 --topic topic1 --to-latest
+
+--reset-offsets also has following scenarios to choose from (atleast one scenario must be selected):
+
+--to-datetime <String: datetime> : Reset offsets to offsets from datetime. Format: 'YYYY-MM-DDTHH:mm:SS.sss'
+--to-earliest : Reset offsets to earliest offset.
+--to-latest : Reset offsets to latest offset.
+--shift-by <Long: number-of-offsets> : Reset offsets shifting current offset by 'n', where 'n' can be positive or negative.
+--from-file : Reset offsets to values defined in CSV file.
+--to-current : Resets offsets to current offset.
+--by-duration <String: duration> : Reset offsets to offset by duration from current timestamp. Format: 'PnDTnHnMnS'
+--to-offset : Reset offsets to a specific offset.
+
+
+kafka-topics.bat --n --topic topic-a --replica-assignment 0:1,0:1,0:1,0:1 --zookeeper localhost:2181
+
+kafka-topics.bat --n --topic FIRST_TOPIC --partitions 4 --replication-factor 3 --config min.insync.replicas=2 --zookeeper localhost:2181
+
+kafka-reassign-partitions.sh --zookeeper localhost:2181 --reassignment-json-file custom-reassignment.json.txt --execute
+
+
+
+cat custom-reassignment.json
+{"version":1,"partitions":[{"topic":"foo1","partition":0,"replicas":[5,6]},{"topic":"foo2","partition":1,"replicas":[2,3]}]}
+
+kafka-reassign-partitions.sh --zookeeper localhost:2181 --reassignment-json-file custom-reassignment.json --execute
+
+
+// below enterprise version will have control center which can be used in a stand-alone manner for a month. With cluster it can't be used
+
+curl -O http://packages.confluent.io/archive/5.1/confluent-5.1.0-2.11.tar.gz
+
+community verstion : it will not have control center
+curl -O http://packages.confluent.io/archive/5.1/confluent-community-5.1.1-2.11.tar.gz
+
+172.31.18.214: 52.77.218.111
+172.31.26.153: 54.169.239.124
+172.31.19.227: 13.229.51.171
+-------------------------------
+tickTime=2000
+dataDir=/var/lib/zookeeper/
+clientPort=2181
+initLimit=5
+syncLimit=2
+server.1=172.31.26.153:2888:3888
+server.2=172.31.18.214:2888:3888
+server.3=172.31.19.227:2888:3888
+autopurge.snapRetainCount=3
+autopurge.purgeInterval=24
+------------------------------------
+scp zookeeper.properties ec2-user@172.31.19.227:/home/ec2-user/confluent-5.1.0/etc/kafka
+scp zookeeper.properties ec2-user@172.31.18.214:/home/ec2-user/confluent-5.1.0/etc/kafka
+-----------------------------------------------------
+broker.id.generation.enable=true
+listeners=PLAINTEXT://172.31.26.153:9092
+advertised.listeners=PLAINTEXT://172.31.26.153:9092
+zookeeper.connect=172.31.26.153:2181,172.31.18.214:2181,172.31.19.227:2181
+---------------------------------
+bootstrap.servers=172.31.26.153:9092,172.31.18.214:9092,172.31.19.227:9092
+zookeeper.connect=172.31.26.153:2181,172.31.18.214:2181,172.31.19.227:2181
+confluent.controlcenter.data.dir=/var/lib/confluent-control-center
+confluent.controlcenter.connect.cluster=http://172.31.26.153:8083,http://172.31.18.214:8083,http://172.31.19.227:8083
+confluent.controlcenter.ksql.url=http://172.31.26.153:8088
+confluent.controlcenter.schema.registry.url=http://172.31.26.153:8081
+-------------------------------------------------------
+sudo vi /etc/kafka/connect-distributed.properties
+bootstrap.servers=172.31.26.153:9092,172.31.18.214:9092,172.31.19.227:9092
+consumer.interceptor.classes=io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor
+producer.interceptor.classes=io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor
+
+scp connect-distributed.properties ec2-user@172.31.19.227:/home/ec2-user/confluent-5.1.0/etc/kafka
+scp connect-distributed.properties ec2-user@172.31.18.214:/home/ec2-user/confluent-5.1.0/etc/kafka
+
+--------------------------------------------------------------------------
+
+sudo mkdir /var/lib/zookeeper
+sudo chmod 777 -R  /var/lib/zookeeper
+cd /var/lib/zookeeper
+ echo "1" > myid
+----------------------
+
+sudo yum install java-1.8.0-openjdk-devel
+sudo alternatives --config java
+------------------------------------------------
+sudo ./zookeeper-server-start ../etc/kafka/zookeeper.properties
+
+sudo ./kafka-server-start ../etc/kafka/server.properties
+
+sudo ./schema-registry-start ../etc/schema-registry/schema-registry.properties
+
+sudo ./ksql-server-start ../etc/ksql/ksql-server.properties
+
+// below command will not work as control center is licensed version
+
+sudo ./control-center-start  ../etc/confluent-control-center/control-center.properties
+
+To start the control-center in stand-alone mannger and to use some other IP other than localhost, we need to
+add following line in the control-center-development file
+listeners=http://IP:9021
+
+export KAFKA_HOME=/home/ec2-user/confluent-5/
+export ZOOKEEPER_HOME=/home/ec2-user/confluent-5/
+PATH= $PATH:$KAFKA_HOME/bin:$ZOOKEEPER_HOME/bin
+
+/bin/kafka-rest-start <path-to-confluent>/etc/kafka-rest/kafka-rest.properties
+
+./bin/connect-distributed ../etc/schema-registry/connect-avro-distributed.properties
+
+-----------------------------------------------------------------------------------------
+
+Production Configuration Options:
+The Kafka default settings should work in most cases, especially the performance-related settings and options, but there are some logistical configurations that should be changed for production depending on your cluster layout.
+General configs
+zookeeper.connect
+The list of ZooKeeper hosts that the broker registers at. It is recommended that you configure this to all the hosts in your ZooKeeper cluster
+
+Type: string
+Importance: high
+broker.id
+Integer ID that identifies a broker. Brokers in the same Kafka cluster must not have the same ID.
+Type: int
+Importance: high
+log.dirs
+The directories in which the Kafka log data is located.
+
+Type: string
+Default: "/tmp/kafka-logs"
+Importance: high
+listeners
+Comma-separated list of URIs (including protocol) that the broker will listen on. Specify hostname as 0.0.0.0 to bind to all interfaces or leave it empty to bind to the default interface. An example is PLAINTEXT://myhost:9092.
+
+Type: string
+Default: PLAINTEXT://host.name:port where the default for host.name is an empty string and the default for port is 9092
+Importance: high
+advertised.listeners
+Listeners to publish to ZooKeeper for clients to use. In IaaS environments, this may need to be different from the interface to which the broker binds. If this is not set, the value for listeners will be used.
+
+Type: string
+Default: listeners
+Importance: high
+num.partitions
+The default number of log partitions for auto-created topics. You should increase this since it is better to over-partition a topic. Over-partitioning a topic leads to better data balancing and aids consumer parallelism. For keyed data, you should avoid changing the number of partitions in a topic.
+
+Type: int
+Default: 1
+Valid Values: [1,...]
+Importance: medium
+Dynamic Update Mode: read-only
+Replication configs
+default.replication.factor
+The default replication factor that applies to auto-created topics. You should set this to at least 2.
+
+Type: int
+Default: 1
+Importance: medium
+min.insync.replicas
+The minimum number of replicas in ISR needed to commit a produce request with required.acks=-1 (or all).
+
+Type: int
+Default: 1
+Importance: medium
+unclean.leader.election.enable
+Indicates whether to enable replicas not in the ISR set to be elected as leader as a last resort, even though doing so may result in data loss.
+
+Type: int
+Default: 1
+Importance: medium
+
+
+---------------------------------------------------------------------
+
+./bin/confluent-hub install --no-prompt confluentinc/kafka-connect-datagen:0.1.0
+
+./bin/confluent start
+
+./kafka-topics --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic user
+
+./kafka-topics --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic pageview
+
+1.Install the source connector kafka-connect-datagen from Confluent Hub.
+
+./confluent-hub install --no-prompt confluentinc/kafka-connect-datagen:0.1.0
+
+2.Run one instance of the kafka-connect-datagen connector to produce Kafka data to the pageviews topic in AVRO format.
+
+wget https://github.com/confluentinc/kafka-connect-datagen/raw/master/config/connector_pageviews_cos.config
+
+curl -X POST -H "Content-Type: application/json" --data @connector_pageviews_cos.config http://localhost:8083/connectors
+
+3.Run another instance of the kafka-connect-datagen connector to produce Kafka data to the users topic in AVRO format
+
+wget https://github.com/confluentinc/kafka-connect-datagen/raw/master/config/connector_users_cos.config
+
+curl -X POST -H "Content-Type: application/json" --data @connector_users_cos.config http://localhost:8083/connectors
+
+
+4: Create and Write to a Stream and Table using KSQL
+
+Create Streams and Tables:
+
+./ksql
+
+CREATE STREAM pageviews (viewtime BIGINT, userid VARCHAR, pageid VARCHAR) \
+WITH (KAFKA_TOPIC='pageviews', VALUE_FORMAT='AVRO');
+
+SHOW STREAMS;
+
+CREATE TABLE users (registertime BIGINT, gender VARCHAR, regionid VARCHAR,    \
+userid VARCHAR, interests array<VARCHAR>, contact_info map<VARCHAR, VARCHAR>) \
+WITH (KAFKA_TOPIC='users', VALUE_FORMAT='AVRO', KEY = 'userid');
+
+Write Queries:
+
+Add the custom query prope
+
+rty earliest for the auto.offset.reset parameter. This instructs KSQL queries to read all available topic data from the beginning. 
+This configuration is used for each subsequent query.
+
+SET 'auto.offset.reset'='earliest';
+
+SELECT pageid FROM pageviews LIMIT 3;
+
+Create a persistent query that filters for female users. The results from this query are written to the Kafka PAGEVIEWS_FEMALE topic. This query enriches the pageviews STREAM by doing a LEFT JOIN with the users TABLE on the user ID, where a condition (gender = 'FEMALE') is met.
+
+
+CREATE STREAM pageviews_female AS SELECT users.userid AS userid, pageid, \
+regionid, gender FROM pageviews LEFT JOIN users ON pageviews.userid = users.userid \
+WHERE gender = 'FEMALE';
+
+Create a persistent query where a condition (regionid) is met, using LIKE. Results from this query are written to a Kafka topic named pageviews_enriched_r8_r9
+
+
+CREATE STREAM pageviews_female_like_89 WITH (kafka_topic='pageviews_enriched_r8_r9', \
+value_format='AVRO') AS SELECT * FROM pageviews_female WHERE regionid LIKE '%_8' OR regionid LIKE '%_9';
+
+Create a persistent query where a condition (regionid) is met, using LIKE. Results from this query are written to a Kafka topic named pageviews_enriched_r8_r9
+
+CREATE TABLE pageviews_regions AS SELECT gender, regionid , \
+COUNT(*) AS numusers FROM pageviews_female WINDOW TUMBLING (size 30 second) \
+GROUP BY gender, regionid HAVING COUNT(*) > 1;
+
+Monitor Streaming Data:
+
+View the details for your stream or table with the DESCRIBE EXTENDED command
+DESCRIBE EXTENDED pageviews_female_like_89;
+------------------------------------------------------------------------------------
+./confluent list connectors
+
+sudo vi ./etc/kafka/connect-file-source.properties
+
+# User defined connector instance name.
+name=file-source
+# The class implementing the connector
+connector.class=FileStreamSource
+# Maximum number of tasks to run for this connector instance
+tasks.max=1
+# The input file (path relative to worker's working directory)
+# This is the only setting specific to the FileStreamSource
+file=test.txt
+# The output topic in Kafka
+topic=connect-test
+
+
+
+if choosing to use this tutorial without Schema Registry,
+you must also specify the key.converter and value.converter properties to use 
+org.apache.kafka.connect.json.JsonConverter
+
+./confluent load file-source
+
+for i in {1..3}; do echo "log line $i"; done > test.txt
+
+./confluent status connectors
+
+kafka-avro-console-consumer --bootstrap-server localhost:9092 --topic connect-test --from-beginning
+
+Write File Data with Connect::
+
+vi /etc/kafka/connect-file-sink.properties:
+name=file-sink
+# Name of the connector class to be run
+connector.class=FileStreamSink
+# Max number of tasks to spawn for this connector instance
+tasks.max=1
+# Output file name relative to worker's current working directory
+# This is the only property specific to the FileStreamSink connector
+file=test.sink.txt
+# Comma separate input topic list
+topics=connect-test
+
+./confluent load file-sink
+
+./confluent status file-sink
+
+tail -f test.sink.txt
+
+Now, with both connectors running, we can see data flowing end-to-end in real time. To check this out, use another terminal to tail the output file:
+
+and in a different terminal start appending additional lines to the text file:
+
+for i in {4..1000}; do echo "log line $i"; done >> test.txt
+
+confluent unload file-source
+confluent unload file-sink
+confluent stop connect
+----------------
+
+Generate the keys and certificates
+
+keytool -keystore kafka.server.keystore.jks -alias localhost -genkey
+
+Create your own Certificate Authority:
+
+Generate a CA that is simply a public-private key pair and certificate, and it is intended to sign other certificates.
+
+openssl req -new -x509 -keyout ca-key -out ca-cert -days {validity}
+
+Add the generated CA to the clients’ truststore so that the clients can trust this CA:
+
+keytool -keystore kafka.client.truststore.jks -alias CARoot -import -file ca-cert
+
+Add the generated CA to the brokers’ truststore so that the brokers can trust this CA.
+
+keytool -keystore kafka.server.truststore.jks -alias CARoot -import -file ca-cert
+
+Sign the certificate
+Export the certificate from the keystore:
+keytool -keystore kafka.server.keystore.jks -alias localhost -certreq -file cert-file
+
+Sign it with the CA:
+openssl x509 -req -CA ca-cert -CAkey ca-key -in cert-file -out cert-signed -days {validity} -CAcreateserial -passin pass:{ca-password}
+
+
+import both the certificate of the CA and the signed certificate into the broker keystore:
+keytool -keystore kafka.server.keystore.jks -alias CARoot -import -file ca-cert
+keytool -keystore kafka.server.keystore.jks -alias localhost -import -file cert-signed
+
+Security:
+
+Configure ZooKeeper:
+
+
+vi zookeeper.properties
+set the authentication provider in zookeeper.properties:
+
+
+authProvider.1=org.apache.zookeeper.server.auth.SASLAuthenticationProvider
+
+Configure the zookeeper_jaas.conf file as follows. Note the two semicolons.
+
+vi zookeeper_jaas.conf
+
+Server {
+       org.apache.zookeeper.server.auth.DigestLoginModule required
+       user_super="admin-secret"
+       user_kafka="kafka-secret";
+};
+
+When you start ZooKeeper, pass the name of its JAAS file as a JVM parameter
+
+export KAFKA_OPTS="-Djava.security.auth.login.config=etc/kafka/zookeeper_jaas.conf"
+bin/zookeeper-server-start etc/kafka/zookeeper.properties
+
+
+Configure Brokers:
+
+1. vi server.properties
+listeners=SSL://:9093,SASL_SSL://:9094
+
+security.inter.broker.protocol=SSL
+ssl.client.auth=required
+
+ssl.truststore.location=/var/ssl/private/kafka.server.truststore.jks
+ssl.truststore.password=test1234
+ssl.keystore.location=/var/ssl/private/kafka.server.keystore.jks
+ssl.keystore.password=test1234
+ssl.key.password=test1234
+
+sasl.enabled.mechanisms=PLAIN
+
+vi kafka_server_jaas.conf
+
+KafkaServer {
+   org.apache.kafka.common.security.plain.PlainLoginModule required
+   username="kafkabroker"
+   password="kafkabroker-secret"
+   user_kafkabroker="kafkabroker-secret"
+   user_client1="client1-secret";
+};
+
+Client {
+   org.apache.zookeeper.server.auth.DigestLoginModule required
+   username="kafka"
+   password="kafka-secret";
+};
+
+
+2 If you are using Confluent Control Center to monitor your deployment,than in server.properties
+
+metric.reporters=io.confluent.metrics.reporter.ConfluentMetricsReporter
+confluent.metrics.reporter.security.protocol=SASL_SSL
+confluent.metrics.reporter.ssl.truststore.location=/var/ssl/private/kafka.server.truststore.jks
+confluent.metrics.reporter.ssl.truststore.password=test1234
+confluent.metrics.reporter.sasl.mechanism=PLAIN
+confluent.metrics.reporter.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required \
+   username="kafkabroker" \
+   password="kafkabroker-secret";
+   
+To enable ACLs, we need to configure an authorizer. Kafka provides a simple authorizer implementation, and to use it, you can add the following to server.properties   
+
+authorizer.class.name=kafka.security.auth.SimpleAclAuthorize
+
+3.
+super.users=User:kafkabroker
+
+so server.propties file look like below
+ Enable SSL security protocol for inter-broker communication
+# Enable SASL_SSL security protocol for broker-client communication
+listeners=SSL://:9093,SASL_SSL://:9094
+security.inter.broker.protocol=SSL
+ssl.client.auth=required
+
+# Broker security settings
+ssl.truststore.location=/var/ssl/private/kafka.server.truststore.jks
+ssl.truststore.password=test1234
+ssl.keystore.location=/var/ssl/private/kafka.server.keystore.jks
+ssl.keystore.password=test1234
+ssl.key.password=test1234
+sasl.enabled.mechanisms=PLAIN
+
+# Confluent Metrics Reporter for monitoring with Confluent Control Center
+metric.reporters=io.confluent.metrics.reporter.ConfluentMetricsReporter
+confluent.metrics.reporter.security.protocol=SASL_SSL
+confluent.metrics.reporter.ssl.truststore.location=/var/ssl/private/kafka.server.truststore.jks
+confluent.metrics.reporter.ssl.truststore.password=test1234
+confluent.metrics.reporter.sasl.mechanism=PLAIN
+confluent.metrics.reporter.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required \
+   username="kafkabroker" \
+   password="kafkabroker-secret";
+
+# ACLs
+authorizer.class.name=kafka.security.auth.SimpleAclAuthorizer
+super.users=User:kafkabroker
+
+Configure Clients:
+Any component that interacts with secured Kafka br
+okers is a client and must be configured for security as well. These clients include Kafka Connect workers and certain connectors such as Replicator, Kafka Streams API clients, KSQL clients, non-Java clients, Confluent Control Center, Confluent Schema Registry, REST Proxy, etc.
+
+1
+Add follwing to the client's property file
+
+security.protocol=SASL_SSL
+ssl.truststore.location=/var/ssl/private/kafka.client.truststore.jks
+ssl.truststore.password=test1234
+sasl.mechanism=PLAIN
+sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required \
+    username=\"client\" \
+    password=\"client-secret\";
+	
+	
+Configure Console Producer and Consumer:
+
+Create a client_security.properties file and add below lines:
+security.protocol=SASL_SSL
+ssl.truststore.location=/var/ssl/private/kafka.client.truststore.jks
+ssl.truststore.password=test1234
+sasl.mechanism=PLAIN
+sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required \
+    username=\"client\" \
+    password=\"client-secret\";
+----------------------------------
+Pass in the properties file when using the command line tools.	
+	
+kafka-console-producer --broker-list kafka1:9094 --topic test-topic --producer.config client_security.properties
+kafka-console-consumer --bootstrap-server kafka1:9094 --topic test-topic --consumer.config client_security.properties
+
+Configure Kafka Connect:
+
+connect-distributed.properties add below lines:
+
+# Connect worker
+security.protocol=SASL_SSL
+ssl.truststore.location=/var/ssl/private/kafka.client.truststore.jks
+ssl.truststore.password=test1234
+sasl.mechanism=PLAIN
+sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required \
+   username="connect" \
+   password="connect-secret";
+
+# Embedded producer for source connectors
+producer.security.protocol=SASL_SSL
+producer.ssl.truststore.location=/var/ssl/private/kafka.client.truststore.jks
+producer.ssl.truststore.password=test1234
+producer.sasl.mechanism=PLAIN
+producer.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required \
+  username="connect" \
+  password="connect-secret";
+
+# Embedded consumer for sink connectors
+consumer.security.protocol=SASL_SSL
+consumer.ssl.truststore.location=/var/ssl/private/kafka.client.truststore.jks
+consumer.ssl.truststore.password=test1234
+consumer.sasl.mechanism=PLAIN
+consumer.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required \
+  username="connect" \
+  password="connect-secret";
+
+# Embedded producer for source connectors for streams monitoring with Confluent Control Center
+producer.interceptor.classes=io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor
+producer.confluent.monitoring.interceptor.security.protocol=SASL_SSL
+producer.confluent.monitoring.interceptor.ssl.truststore.location=/var/ssl/private/kafka.client.truststore.jks
+producer.confluent.monitoring.interceptor.ssl.truststore.password=test1234
+producer.confluent.monitoring.interceptor.sasl.mechanism=PLAIN
+producer.confluent.monitoring.interceptor.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required \
+  username="connect" \
+  password="connect-secret";
+
+# Embedded consumer for sink connectors for streams monitoring with Confluent Control Center
+consumer.interceptor.classes=io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor
+consumer.confluent.monitoring.interceptor.security.protocol=SASL_SSL
+consumer.confluent.monitoring.interceptor.ssl.truststore.location=/var/ssl/private/kafka.client.truststore.jks
+consumer.confluent.monitoring.interceptor.ssl.truststore.password=test1234
+consumer.confluent.monitoring.interceptor.sasl.mechanism=PLAIN
+consumer.confluent.monitoring.interceptor.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required \
+  username="connect" \
+  password="connect-secret";
+----------------------------------  
+Confluent Control Center:
+vi etc/confluent-control-center/control-center.properties
+
+confluent.controlcenter.streams.security.protocol=SASL_SSL
+confluent.controlcenter.streams.ssl.truststore.location=/var/ssl/private/kafka.client.truststore.jks
+confluent.controlcenter.streams.ssl.truststore.password=test1234
+confluent.controlcenter.streams.sasl.mechanism=PLAIN
+confluent.controlcenter.streams.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required \
+  username="confluent" \
+  password="confluent-secret";
+  
+Replicator:
+ the Replicator JSON properties file contains the following configuration settings:
+{
+  "name":"replicator",
+  "config":{
+    ....
+    "src.kafka.security.protocol" : "SASL_SSL",
+    "src.kafka.ssl.truststore.location" : "var/private/ssl/kafka.server.truststore.jks",
+    "src.kafka.ssl.truststore.password" : "test1234",
+    "src.kafka.sasl.mechanism" : "PLAIN",
+    "src.kafka.sasl.jaas.config" : "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"replicator\" password=\"replicator-secret\";",
+    "src.consumer.interceptor.classes": "io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor",
+    "src.consumer.confluent.monitoring.interceptor.security.protocol": "SASL_SSL",
+    "src.consumer.confluent.monitoring.interceptor.ssl.truststore.location": "/var/ssl/private/kafka.client.truststore.jks",
+    "src.consumer.confluent.monitoring.interceptor.ssl.truststore.password": "confluent",
+    "src.consumer.confluent.monitoring.interceptor.sasl.mechanism": "PLAIN",
+    "src.consumer.confluent.monitoring.interceptor.sasl.jaas.config": "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"client1\" password=\"client1-secret\";",
+    
+  }
+} 
+  
+  
+------------------------------------------------------------
+
+keytool -keystore kafka.server.keystore.jks -alias localhost -validity {validity} -genkey
+openssl req -new -x509 -keyout ca-key -out ca-cert -days {validity}
+keytool -keystore kafka.client.truststore.jks -alias CARoot -import -file ca-cert
+keytool -keystore kafka.server.truststore.jks -alias CARoot -import -file ca-cert
+keytool -keystore kafka.server.keystore.jks -alias localhost -certreq -file cert-file
+openssl x509 -req -CA ca-cert -CAkey ca-key -in cert-file -out cert-signed -days {validity} -CAcreateserial -passin pass:{ca-password}
+keytool -keystore kafka.server.keystore.jks -alias CARoot -import -file ca-cert
+keytool -keystore kafka.server.keystore.jks -alias localhost -import -file cert-signe
+
+
+Authorization and ACLs:
+The most common use cases for ACL management are adding/removing a principal as a producer or consumer and there are convenience options to handle these cases. In order to add a client called client1, which is part of a group called test, as a producer and consumer of test-topic we can execute the following
+
+
+kafka-acls --authorizer-properties zookeeper.connect=zookeeper:2181 \
+ --add --allow-principal User:client1 \
+ --producer --topic test-topic
+
+kafka-acls --authorizer-properties zookeeper.connect=zookeeper:2181 \
+ --add --allow-principal User:client1 \
+ --consumer --topic test-topic --group test
+ 
+-----------------------------------------------------------------------
+
+Registering a New Version of a Schema Under the Subject “Kafka-key”:
+curl -X POST -H "Content-Type: application/vnd.schemaregistry.v1+json" --data '{"schema": "{\"type\": \"string\"}"}' \
+  http://localhost:8081/subjects/Kafka-key/versions
+
+
+Registering a New Version of a Schema Under the Subject “Kafka-value”
+
+curl -X POST -H "Content-Type: application/vnd.schemaregistry.v1+json" --data '{"schema": "{\"type\": \"string\"}"}' http://localhost:8081/subjects/Kafka-value/versions
+
+
+Registering an Existing Schema to a New Subject Name
+
+Use case: there is an existing schema registered to a subject called Kafka1, and this same schema needs to be available to another subject called Kafka2. The following one-line command reads the existing schema from Kafka1-value and registers it to Kafka2-value. It assumes the tool jq is installed on your machine.
+curl -X POST -H "Content-Type: application/vnd.schemaregistry.v1+json" \
+  --data "{\"schema\": $(curl -s http://localhost:8081/subjects/Kafka1-value/versions/latest | jq '.schema')}" \
+   http://localhost:8081/subjects/Kafka2-value/versions
+{"id":1}
+
+Listing All Subjects
+
+curl -X GET http://localhost:8081/subjects
+["Kafka-value","Kafka-key"]
+ 
+Fetching a Schema by Globally Unique ID 1:
+curl -X GET http://localhost:8081/schemas/ids/1
+{"schema":"\"string\""}
+
+Listing All Schema Versions Registered Under the Subject “Kafka-value”:
+curl -X GET http://localhost:8081/subjects/Kafka-value/versions
+
+Fetch Version 1 of the Schema Registered Under Subject “Kafka-value”:
+curl -X GET http://localhost:8081/subjects/Kafka-value/versions/1
+{"subject":"Kafka-value","version":1,"id":1,"schema":"\"string\""}
+
+ Deleting Version 1 of the Schema Registered Under Subject “Kafka-value”
+ curl -X DELETE http://localhost:8081/subjects/Kafka-value/versions/1
+ 
+ Deleting the Most Recently Registered Schema Under Subject “Kafka-value”
+ curl -X DELETE http://localhost:8081/subjects/Kafka-value/versions/latest
+ 
+ Listing All Subjects
+ curl -X GET http://localhost:8081/subjects
+ 
+ curl -X POST -H "Content-Type: application/vnd.schemaregistry.v1+json" \
+  --data '{ "schema": "{ \"type\": \"record\", \"name\": \"Person\", \"namespace\": \"com.ippontech.kafkatutorials\", \"fields\": [ { \"name\": \"firstName\", \"type\": \"string\" }, { \"name\": \"lastName\", \"type\": \"string\" }, { \"name\": \"birthDate\", \"type\": \"long\" } ]}" }' \
+  http://localhost:8081/subjects/persons-avro-value/versions
+  
+ curl http://localhost:8081/subjects/persons-avro-value/versions/
+ 
+curl http://localhost:8081/subjects/persons-avro-value/versions/1 \
+{"subject":"persons-avro-value","version":1,"id":2,"schema":"{\"type\":\"record\",\"name\":\"Person\",\"namespace\":\"com.ippontech.kafkatutorials\",\"fields\":[{\"name\":\"firstName\",\"type\":\"string\"},{\"name\":\"lastName\",\"type\":\"string\"},{\"name\":\"birthDate\",\"type\":\"long\"}]}"}
+
+--------------------------------------------------------------------
+private fun createProducer(brokers: String, schemaRegistryUrl: String): Producer<String, GenericRecord> {
+    val props = Properties()
+    props["bootstrap.servers"] = brokers
+    props["key.serializer"] = StringSerializer::class.java
+    props["value.serializer"] = KafkaAvroSerializer::class.java
+    props["schema.registry.url"] = schemaRegistryUrl
+    return KafkaProducer<String, GenericRecord>(props)
+	
+val schema = Schema.Parser().parse(File("src/main/resources/person.avsc"))
+
+val avroPerson = GenericRecordBuilder(schema).apply {
+    set("firstName", fakePerson.firstName)
+    set("lastName", fakePerson.lastName)
+    set("birthDate", fakePerson.birthDate.time)
+}.build();
+
+val futureResult = producer.send(ProducerRecord(personsAvroTopic, avroPerson))	
+--------------------------------------
+bin/kafka-run-class.sh kafka.tools.MirrorMaker --consumer.config consumer-1.properties \
+ --consumer.config consumer-2.properties --producer.config producer.properties \
+ --whitelist my-topic
+--------------------------------------------------
+to find out which broker is active controller 
+
+zookeeper-shell.bat localhost:2181 get /controller
+---------------
+Updating Broker Configs:
+To alter the current broker configs for broker id 0 (for example, the number of log cleaner threads):
+
+bin/kafka-configs.sh --bootstrap-server localhost:9092 --entity-type brokers --entity-name 0 --alter --add-config log.cleaner.threads=2
+
+To describe the current dynamic broker configs for broker id 0:
+
+bin/kafka-configs.sh --bootstrap-server localhost:9092 --entity-type brokers --entity-name 0 --describe
+
+To describe the currently configured dynamic cluster-wide default configs:
+
+bin/kafka-configs.sh --bootstrap-server localhost:9092 --entity-type brokers --entity-default --describe
+
+Updating topic configuration:
+
+bin/kafka-configs.sh --zookeeper localhost:2181 --entity-type topics --entity-name my-topic
+    --alter --add-config max.message.bytes=128000
+To check overrides set on the topic you can do
+
+bin/kafka-configs.sh --zookeeper localhost:2181 --entity-type topics --entity-name my-topic --describe
+
+To remove an override you can do:
+
+bin/kafka-configs.sh --zookeeper localhost:2181  --entity-type topics --entity-name my-topic
+    --alter --delete-config max.message.bytes	
+-----------------------
+Producer:
+max.request.size:1048576
+retry.backoff.ms:100
+retry:
+max.in.flight.requests.per.connection:5
+client.id
+client.rack
+request.timeout.ms:30000
+connections.max.idle.ms:540000
+
+delivery.timeout.ms:120000
+The value of this config should be greater than or equal to the sum of request.timeout.ms and linger.ms
+enable.idempotence:false
+
+Note that enabling idempotence requires max.in.flight.requests.per.connection to be less than or equal to 5, retries to be greater than 0 and acks must be 'all'
+
+Consumer:
+fetch.max.bytes:52428800
+group.instance.id:null
+max.poll.interval.ms:300000
+isolation.level:read_uncommitted
+max.poll.records:500
+request.timeout.ms:30000
+partition.assignment.strategy:class org.apache.kafka.clients.consumer.RangeAssignor
+auto.commit.interval.ms: 5000
+client.id:
+client.rack
+metadata.max.age.ms:300000
+reconnect.backoff.ms:50
+reconnect.backoff.max.ms:1000
+retry.backoff.ms:100
+
+
+
